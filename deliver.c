@@ -40,6 +40,7 @@ int main(int argc, char *argv[]) {
     printf("Please input the following command with the file you would like to transfer:\n(ftp <file name>)\n");
     char filename[50];
     scanf("%s", filename);
+    scanf("%s", filename);
     if( access( filename, F_OK ) == 0 ) {
         char *ftp = "ftp";
         sendto(sockfd, (const char *)ftp, strlen(ftp),
