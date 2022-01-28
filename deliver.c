@@ -9,6 +9,11 @@
    
 #define MAXLINE 1024
 
+// https://stackoverflow.com/questions/15707933/how-to-serialize-a-struct-in-c
+// https://stackoverflow.com/questions/1577161/passing-a-structure-through-sockets-in-c
+
+// TODO: Define the packet struct here
+
 // Creates and binds a socket, then sends message and waits for response
 int main(int argc, char *argv[]) {
     int sockfd;
@@ -51,9 +56,22 @@ int main(int argc, char *argv[]) {
     // Get filename
     scanf("%s", filename);
 
-    // Check file existence and send message if exists
-    if( access( filename, F_OK ) == 0 ) {
+    // Check file existence and send message if exists / readable
+    if( access( filename, R_OK ) == 0 ) {
+        // TODO: 
+        // read filestream into byte[]
+        // https://stackoverflow.com/questions/22059189/read-a-file-as-byte-array
+        // 
+
+
+        // declare packet_array[] of const void *;
+        // packet_array = serialize_file(fileStream, filename) 
+        // This method should take the stream and break it up into the required number of packets 
+        // Should return an array of packets
         
+        // send_packets(packet_array);
+        // This method should {for each packet in array: sendto(); wait for ACK; deserialize_ACK() and ensure its good}
+
         char *ftp = "ftp";
         num_bytes = sendto(sockfd, (const char *)ftp, strlen(ftp),
         MSG_CONFIRM, (const struct sockaddr *) &servaddr, 
