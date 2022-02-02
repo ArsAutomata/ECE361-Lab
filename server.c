@@ -10,6 +10,9 @@
    
 #define MAXLINE 1024
 
+// TODO: Define the packet struct here
+
+
 // Creates and binds a socket, then waits for message
 int main(int argc, char *argv[]) {
     int sockfd;
@@ -59,10 +62,29 @@ int main(int argc, char *argv[]) {
        
     int len, num_bytes;
     len = sizeof(cliaddr);  //len is value/result
-   
+    
+    // Receive first packet
     num_bytes = recvfrom(sockfd, (char *)buffer, MAXLINE, 
                 MSG_WAITALL, ( struct sockaddr *) &cliaddr,
                 &len);
+
+    // Create struct packet
+    // Create file stream with the file name given 
+    
+    // TODO: Send ACK packet
+    // Receive_packet(struct packet, fileStream)
+    // This method will do:
+    // while(frag # = total_frag){ receive packet; deserialize packet and write data to the file stream; send ACK }
+    // ^ use fwrite https://stackoverflow.com/questions/28405884/writing-bytearray-to-file-in-c
+    // Close file stream
+
+    // ACK packet formation 
+    // total_frag = same
+    // frag no. = same
+    // size = 0
+    // filename = ACK
+    // filedata = empty
+
 
     // Check if something was received
     if(num_bytes == -1){
