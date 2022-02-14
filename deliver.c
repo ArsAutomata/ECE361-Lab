@@ -4,109 +4,146 @@
 #include <string.h>
 #include <sys/types.h>
 #include <sys/socket.h>
-#include <netdb.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
    
 #define MAXLINE 1024
 
-// TODO: Define the packet struct here
+// https://stackoverflow.com/questions/15707933/how-to-serialize-a-struct-in-c
+// https://stackoverflow.com/questions/1577161/passing-a-structure-through-sockets-in-c
 
+struct packet {  
+    unsigned int total_frag;  
+    unsigned int frag_no; 
+    unsigned int size; 
+    char* filename; 
+    char filedata[1000];  
+}
 
-// Creates and binds a socket, then waits for message
+const void * serialize_file(int num_packets, long len, char * file_stream, char * filename){
+    struct packet p_array[num_packets];
+    for (int i; i < num_packets; i++){
+        struct packet pkt;
+        pkt.total_frag = num_packets;
+        pkt.frag_no = i+1;
+        pkt.filename = filename;
+        if (i == num_packets - 1){
+            // This is the last packet
+            pkt.size = len % 1000;
+            pkt.filedata = file_stream + (num_packets-2)*1000 +pkt.size;
+        }else{
+            pkt.size = 1000;
+            pkt.filedata = file_stream + i*1000;
+        }
+        p_array[i] = pkt;
+    }
+    return p_array;
+
+}
+
+// Creates and binds a socket, then sends message and waits for response
 int main(int argc, char *argv[]) {
     int sockfd;
     char buffer[MAXLINE];
-    
-    struct sockaddr_in servaddr, cliaddr;
+    struct sockaddr_in servaddr;
 
-    if (argc != 2) {
-        fprintf(stderr,"usage: server <UDP listen port>\n");
+    if (argc != 3) {
+        fprintf(stderr,"usage: deliver <server address> <server port number>\n");
         exit(1);
     }
-    int port = atoi(argv[1]);
-       
-    // Creating socket file descriptor
+    char *server_address = argv[1];
+    int port = atoi(argv[2]);
+   
+    // socket file descriptor for IPv4
     if ( (sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0 ) {
         perror("socket creation failed");
-        exit(EXIT_FAILURE);
+        exit(1);
     }
-       
+   
     memset(&servaddr, 0, sizeof(servaddr));
-    memset(&cliaddr, 0, sizeof(cliaddr));
-
-    // get IP address of local machine
-    char hostbuffer[256];
-    gethostname(hostbuffer, sizeof(hostbuffer));
-    char *IPbuffer;
-    struct hostent *host_entry;
-    host_entry = gethostbyname(hostbuffer);
-    IPbuffer = inet_ntoa(*((struct in_addr*) host_entry->h_addr_list[0]));
-    if (IPbuffer == NULL){ 
-        printf("Couldn't get IP of local machine"); 
-        exit(1);
-    }
-    
+       
     // Filling server information
-    servaddr.sin_family    = AF_INET; // IPv4
-    servaddr.sin_addr.s_addr = inet_addr(IPbuffer);
+    servaddr.sin_family = AF_INET;
     servaddr.sin_port = htons(port);
+    servaddr.sin_addr.s_addr = inet_addr(server_address);
        
-    // Bind the socket with the server address
-    if ( bind(sockfd, (const struct sockaddr *)&servaddr, 
-            sizeof(servaddr)) < 0 )
-    {
-        perror("bind failed");
-        exit(EXIT_FAILURE);
-    }
-       
-    int len, num_bytes;
-    len = sizeof(cliaddr);  //len is value/result
+    int num_bytes;
+    socklen_t servaddr_len;
     
-    // Receive first packet
-    num_bytes = recvfrom(sockfd, (char *)buffer, MAXLINE, 
-                MSG_WAITALL, ( struct sockaddr *) &cliaddr,
-                &len);
+    printf("Please input the following command with the file you would like to transfer:\n(ftp <file name>)\n");
+    char filename[50];
 
-    // Create struct packet
-    // Create file stream with the file name given 
-    
-    // TODO: Send ACK packet
-    // Receive_packet(struct packet, fileStream)
-    // This method will do:
-    // while(frag # = total_frag){ receive packet; deserialize packet and write data to the file stream; send ACK }
-    // ^ use fwrite https://stackoverflow.com/questions/28405884/writing-bytearray-to-file-in-c
-    // Close file stream
-
-    // ACK packet formation 
-    // total_frag = same
-    // frag no. = same
-    // size = 0
-    // filename = ACK
-    // filedata = empty
-
-
-    // Check if something was received
-    if(num_bytes == -1){
-        printf("Recvfrom failed!");
+    // Call twice to get both words
+    scanf("%s", filename);
+    if (strcmp(filename, "ftp") != 0){
+        printf("Usage: ftp <file name>");
         exit(1);
     }
-    buffer[num_bytes] = '\0';
-    printf("Client : %s\n", buffer);
-    
-    if (strcmp(buffer, "ftp") == 0){
-        char *yes = "yes";
-        sendto(sockfd, (const char *)yes, strlen(yes), 
-        MSG_CONFIRM, (const struct sockaddr *) &cliaddr,
-            len);
-        printf("yes message sent.\n"); 
-    }else{
-        char *no = "no";
-        sendto(sockfd, (const char *)no, strlen("no"), 
-        MSG_CONFIRM, (const struct sockaddr *) &cliaddr,
-            len);
-        printf("no message sent.\n"); 
+
+    // Get filename
+    scanf("%s", filename);
+
+    // Check file existence and send message if exists / readable
+    if( access( filename, R_OK ) == 0 ) {
+        FILE *fileptr;
+        char *buffer;
+        long filelen;
+
+        fileptr = fopen(filename, "rb");  // Open the file in binary mode
+        fseek(fileptr, 0, SEEK_END);          // Jump to the end of the file
+        filelen = ftell(fileptr);             // Get the current byte offset in the file
+        rewind(fileptr);                      // Jump back to the beginning of the file
+
+        buffer = (char *)malloc(filelen * sizeof(char)); // Enough memory for the file
+        fread(buffer, filelen, 1, fileptr); // Read in the entire file
+        fclose(fileptr); // Close the file
+
+        int num_packets = len / 1000 + (len % 1000 == 0 ? 0 : 1);
+        struct packet packet_array[num_packets] = serialize_file(num_packets, filelen, buffer, filename);
+
+        
+        for(int i=0; i<len; i++){
+            // for each packet in array: sendto(); 
+            // num_bytes = sendto(sockfd, (const char *)ftp, strlen(ftp),
+            // MSG_CONFIRM, (const struct sockaddr *) &servaddr, 
+            //     sizeof(servaddr));
+
+            // // Ensure if something was sent
+            // if(num_bytes == -1){
+            //     printf("Sendto failed!");
+            //     exit(1);
+            // }
+        
+            // wait for ACK;
+            num_bytes = recvfrom(sockfd, (char *)buffer, MAXLINE, 
+                        MSG_WAITALL, (struct sockaddr *) &servaddr,
+                        &servaddr_len);
+            
+            // Check if something was received
+            if(num_bytes == -1){
+                printf("Recvfrom failed!");
+                exit(1);
+            }
+            buffer[num_bytes] = '\0';
+            if (strcmp(buffer, "ack") == 0){
+                printf("acknowledge received\n"); 
+            }else{
+                exit(1);
+            }
+
+
+        }
+
+        
+        
+    } else {
+        printf("The file does not exist or the pathname is incorrect");
+        exit(1);
     }
     
+    
+    
+    // Close the file descriptor
+    close(sockfd);
     return 0;
 }
