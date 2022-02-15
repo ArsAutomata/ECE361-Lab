@@ -8,10 +8,6 @@
 #include <netinet/in.h>
    
 #define MAXLINE 1024
-
-// https://stackoverflow.com/questions/15707933/how-to-serialize-a-struct-in-c
-// https://stackoverflow.com/questions/1577161/passing-a-structure-through-sockets-in-c
-
 struct packet {  
     unsigned int total_frag;  
     unsigned int frag_no; 
@@ -107,12 +103,28 @@ int main(int argc, char *argv[]) {
             // num_bytes = sendto(sockfd, (const char *)ftp, strlen(ftp),
             // MSG_CONFIRM, (const struct sockaddr *) &servaddr, 
             //     sizeof(servaddr));
+            char * pre_pkt_string = sprintf("%d:%d:%d:%s:", 
+                packet_array[i].total_frag, 
+                packet_array[i].frag_no, 
+                packet_array[i].size, 
+                packet_array[i].filename
+                );
 
-            // // Ensure if something was sent
-            // if(num_bytes == -1){
-            //     printf("Sendto failed!");
-            //     exit(1);
-            // }
+            int packet_len = strlen(pre_pkt_string) + packet_array[i].size;
+            char pkt_string[packet_len] = "";
+            strcat(pkt_string, pre_pkt_string);
+            for(int j =0; j< packet_array[i].size; j++){
+                pkt_string[strlen(pre_pkt_string) + j] = packet_array[i].filedata[j];
+            }
+
+            num_bytes = sendto(sockfd, (const char *)pkt_string, strlen(pkt_string), MSG_CONFIRM, (const struct sockaddr *) &servaddr, sizeof(servaddr));
+
+
+            // Ensure if something was sent
+            if(num_bytes == -1){
+                printf("Sendto failed!");
+                exit(1);
+            }
         
             // wait for ACK;
             num_bytes = recvfrom(sockfd, (char *)buffer, MAXLINE, 
