@@ -167,6 +167,7 @@ int main(int argc, char *argv[]) {
             fwrite(pkt.filedata, 1, pkt.size, fp); 
             fprintf(stderr,"\n");
             clearBuf(buffer); 
+            printf("packet 1 delivered, %d packets remaining", pkt.frag_no, (pkt.total_frag-1));
         }
 
     //process packets
