@@ -7,6 +7,9 @@
 #include <netdb.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
    
 #define MAXLINE 1250
 
@@ -75,7 +78,7 @@ struct packet parsepacket(char * filebuffer){
 }
 
 //write into given file
-void writepacket(char * filebuffer, char * filename){
+/*void writepacket(char * filebuffer, char * filename){
     FILE *fp; 
    
     if(fp == NULL)
@@ -93,6 +96,7 @@ void writepacket(char * filebuffer, char * filename){
         fclose(fp);
     }
 }
+*/
 
 //clear the buffer 
 void clearBuf(char* b)
@@ -152,9 +156,12 @@ int main(int argc, char *argv[]) {
     len = sizeof(cliaddr);  //len is value/result
     
     struct packet pkt;
-
+    
     FILE *fp; 
     
+    char* spacketnum; 
+    char ACKbuffer[120];  
+   
     // Receive first packet
         num_bytes = recvfrom(sockfd, (char *)buffer, MAXLINE, 
                 MSG_WAITALL, ( struct sockaddr *) &cliaddr,
@@ -172,16 +179,26 @@ int main(int argc, char *argv[]) {
             printf("NACK\n"); 
             clearBuf(buffer);
             exit(1);
-        }else{
-            //send ack
-            char *ACK = "ACK";
-            sendto(sockfd, (const char *)ACK, strlen(ACK), 
-            MSG_CONFIRM, (const struct sockaddr *) &cliaddr,
-                len);
-            
-            
+        }else{    
             //process the packet
             pkt = parsepacket(buffer); 
+               
+            //make ack for packet 
+            char *ACK = "ACK";
+            
+            if (asprintf(&spacketnum, "%d", pkt.frag_no) == -1) {
+                perror("asprintf");
+            } else {
+                strcat(strcpy(ACKbuffer, ACK), spacketnum);
+                free(spacketnum);
+            }
+            
+            fprintf(stderr, "\nSending ACK %d", pkt.frag_no);
+            
+            //send ACK
+            sendto(sockfd, (const char *)ACKbuffer, strlen(ACK), 
+            MSG_CONFIRM, (const struct sockaddr *) &cliaddr,
+                len);  
             
             
             fp = fopen(pkt.filename, "w"); 
@@ -218,17 +235,27 @@ int main(int argc, char *argv[]) {
             printf("NACK\n"); 
             clearBuf(buffer);
             exit(1);
-        }else{
-            //send ack
-            char *ACK = "ACK";
-            sendto(sockfd, (const char *)ACK, strlen(ACK), 
-            MSG_CONFIRM, (const struct sockaddr *) &cliaddr,
-                len);
-            fprintf(stderr, "\nSending ACK");
-            
-            
+        }else{            
             //process the packet
             pkt = parsepacket(buffer); 
+           
+           
+            //make ack for packet 
+            char *ACK = "ACK";
+            
+            if (asprintf(&spacketnum, "%d", pkt.frag_no) == -1) {
+                perror("asprintf");
+            } else {
+                strcat(strcpy(ACKbuffer, ACK), spacketnum);
+                free(spacketnum);
+            }
+           
+            //send ACK
+            sendto(sockfd, (const char *)ACKbuffer, strlen(ACK), 
+            MSG_CONFIRM, (const struct sockaddr *) &cliaddr,
+                len);  
+            fprintf(stderr, "\nSending ACK %d", pkt.frag_no);
+           
             fwrite(pkt.filedata, 1, pkt.size, fp); 
             clearBuf(buffer); 
             
