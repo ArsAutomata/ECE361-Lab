@@ -21,27 +21,51 @@ struct packet {
 //parse the packet string
 struct packet parsepacket(char * filebuffer){
     struct packet pkt;
-    char data[1250];
     int num_colons =0;
-    for(int i =0; i < 1250; i++){
-        if(num_colons == 4) break;
-        data[i] = filebuffer[i];
-    }
-    while(i < 4){
-        data[]
-    }
+    char total_frag[50];
+    char frag_no[50];
+    char size[50];
+    char filename[50];
+    int start_of_data = 0;
     
-    token = strtok(filebuffer, ":");
-    pkt.total_frag = atoi(token); 
-    token = strtok(NULL, ":");
-    pkt.frag_no = atoi(token); 
-    token = strtok(NULL, ":");
-    pkt.size = atoi(token); 
-    name = strtok(NULL, ":");
-    pkt.filename = name; 
-    token = strtok(NULL, ":");
-    for(int j =0; j < pkt.size; j++){
-        pkt.filedata[j] = token[j];
+    for(int i =0; i < 1250; i++){
+        if(filebuffer[i] = ':') {
+            if(num_colons == 0) {
+            total_frag[i+1] = '\0';
+            }else if(num_colons == 1) {
+                frag_no[i+1] = '\0';
+            }else if(num_colons == 2) {
+                size[i+1] = '\0';
+            }else if(num_colons == 3) {
+                filename[i+1] = '\0';
+            }
+            num_colons++;
+            continue;
+        
+        }
+        if(num_colons == 0) {
+            total_frag[i] = filebuffer[i];
+        }else if(num_colons == 1) {
+            frag_no[i] = filebuffer[i];
+        }else if(num_colons == 2) {
+            size[i] = filebuffer[i];
+        }else if(num_colons == 3) {
+            filename[i] = filebuffer[i];
+        }else if(num_colons == 4) {
+            start_of_data = i;
+            break;
+            
+        }
+    }
+    sscanf(total_frag, "%d", &(pkt.total_frag)); 
+    sscanf(frag_no, "%d", &(pkt.frag_no)); 
+    pkt.size = atoi(size); 
+    int i = 0;
+    fprintf(stderr,"%d fucking hell\n", pkt.size);
+    while(i < pkt.size){
+        pkt.filedata[i] = filebuffer[i + start_of_data];
+        fprintf(stderr,"\nhuh %d", i);
+        i++;
     }
     return pkt; 
 }
@@ -157,7 +181,7 @@ int main(int argc, char *argv[]) {
             
             
             // fp = fopen(pkt.filename, "w"); 
-            fp = fopen("hmm.pdf", "w"); 
+            fp = fopen("hmm.txt", "w"); 
             if (!fp){
                 fprintf(stderr,"Failed to create file");
                 exit(1);
