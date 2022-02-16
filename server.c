@@ -21,7 +21,8 @@ struct packet {
 //parse the packet string
 struct packet parsepacket(char * filebuffer){
     struct packet pkt;
-    char * token; 
+    char * token = (char *) malloc(1000);
+    char * name;
     
     token = strtok(filebuffer, ":");
     pkt.total_frag = atoi(token); 
@@ -29,13 +30,16 @@ struct packet parsepacket(char * filebuffer){
     pkt.frag_no = atoi(token); 
     token = strtok(NULL, ":");
     pkt.size = atoi(token); 
+    name = strtok(NULL, ":");
+    pkt.filename = name; 
     token = strtok(NULL, ":");
-    pkt.filename = token; 
-    token = strtok(NULL, ":");
-    fprintf(stderr,"poooooo");
-    strcpy(pkt.filedata, token);
+    for(int j =0; j < pkt.size; j++){
+        fprintf(stderr,"poooooo %d\n", j);
+        pkt.filedata[j] = 'h';
+        fprintf(stderr,"ggggg %d\n", j);
+    }
     fprintf(stderr,"peeeee");
-    
+    free(token);
     return pkt; 
 }
 
@@ -117,15 +121,10 @@ int main(int argc, char *argv[]) {
     len = sizeof(cliaddr);  //len is value/result
     
     struct packet pkt;
-    pkt.frag_no = 0; 
-    pkt.total_frag = 0; 
 
     FILE *fp; 
     
-    //process packets
-    do{
-        
-        // Receive first packet
+    // Receive first packet
         num_bytes = recvfrom(sockfd, (char *)buffer, MAXLINE, 
                 MSG_WAITALL, ( struct sockaddr *) &cliaddr,
                 &len);
@@ -149,28 +148,66 @@ int main(int argc, char *argv[]) {
             sendto(sockfd, (const char *)ACK, strlen(ACK), 
             MSG_CONFIRM, (const struct sockaddr *) &cliaddr,
                 len);
-            printf("hhhhhh");
             fprintf(stderr, "sending ack\n");
             
             
             //process the packet
             pkt = parsepacket(buffer); 
             
-            if(pkt.frag_no == 0){
-                fp = fopen(pkt.filename, "w"); 
-                if (!fp){
-                    fprintf(stderr,"Failed to create file");
-                    exit(1);
-                }
-            }
-            fprintf(stderr,"1111111");
-            fwrite(pkt.filedata, 1, pkt.size, fp); 
             
+            // fp = fopen(pkt.filename, "w"); 
+            fprintf(stderr, "fil enam e! %s\n", pkt.filename);
+            fp = fopen("mannn.txt", "w"); 
+            if (!fp){
+                fprintf(stderr,"Failed to create file");
+                exit(1);
+            }
+            
+            
+            fwrite(pkt.filedata, 1, pkt.size, fp); 
+            fprintf(stderr,"1111111\n");
+            clearBuf(buffer); 
+        }
+
+    //process packets
+    for(int k =0; k< pkt.total_frag; k++){
+        
+        num_bytes = recvfrom(sockfd, (char *)buffer, MAXLINE, 
+                MSG_WAITALL, ( struct sockaddr *) &cliaddr,
+                &len);
+        fprintf(stderr,"shhiiii");
+        // Check if something was received
+        if(num_bytes == -1){
+            printf("Recvfrom failed!");
+            //send no ack
+            char *NACK = "NACK";
+            sendto(sockfd, (const char *)NACK, strlen("NACK"), 
+            MSG_CONFIRM, (const struct sockaddr *) &cliaddr,
+                len);
+           
+            //notify and clear buffer
+            printf("NACK\n"); 
+            clearBuf(buffer);
+            exit(1);
+        }else{
+            //send ack
+            char *ACK = "ACK";
+            sendto(sockfd, (const char *)ACK, strlen(ACK), 
+            MSG_CONFIRM, (const struct sockaddr *) &cliaddr,
+                len);
+            fprintf(stderr, "sending ack\n");
+            
+            
+            //process the packet
+            pkt = parsepacket(buffer); 
+            fwrite(pkt.filedata, 1, pkt.size, fp); 
+            fprintf(stderr,"1111111\n");
             clearBuf(buffer); 
         }
       
-    }while(pkt.frag_no<=pkt.total_frag);
+    }
     fclose(fp);
+    fprintf(stderr,"closing\n");
     
     //close the socket
     close(sockfd);
