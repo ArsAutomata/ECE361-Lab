@@ -21,8 +21,15 @@ struct packet {
 //parse the packet string
 struct packet parsepacket(char * filebuffer){
     struct packet pkt;
-    char * token = (char *) malloc(1000);
-    char * name;
+    char data[1250];
+    int num_colons =0;
+    for(int i =0; i < 1250; i++){
+        if(num_colons == 4) break;
+        data[i] = filebuffer[i];
+    }
+    while(i < 4){
+        data[]
+    }
     
     token = strtok(filebuffer, ":");
     pkt.total_frag = atoi(token); 
@@ -143,7 +150,6 @@ int main(int argc, char *argv[]) {
             sendto(sockfd, (const char *)ACK, strlen(ACK), 
             MSG_CONFIRM, (const struct sockaddr *) &cliaddr,
                 len);
-            fprintf(stderr, "sending ack\n");
             
             
             //process the packet
@@ -151,7 +157,7 @@ int main(int argc, char *argv[]) {
             
             
             // fp = fopen(pkt.filename, "w"); 
-            fp = fopen("mannn", "w"); 
+            fp = fopen("hmm.pdf", "w"); 
             if (!fp){
                 fprintf(stderr,"Failed to create file");
                 exit(1);
