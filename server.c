@@ -43,19 +43,19 @@ struct packet parsepacket(char * filebuffer){
 //write into given file
 void writepacket(char * filebuffer, char * filename){
     FILE *fp; 
-    int fsize = strlen(filebuffer); 
-   
    
     if(fp == NULL)
     {
-      printf("Error in file name!");   
+      printf("Error in file name");   
       exit(1);
     }
     fp = fopen(filename, "w"); 
     if(fp){
-        fwrite(filebuffer, fsize, 1, fp); 
+        fwrite(filebuffer, sizeof(filebuffer), 1, fp); 
         fclose(fp);
     }else{
+        printf("Could not open file"); 
+        exit(1); 
         fclose(fp);
     }
 }
