@@ -7,7 +7,7 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
    
-#define MAXLINE 1024
+#define MAXLINE 1250
 struct packet {  
     unsigned int total_frag;  
     unsigned int frag_no; 
@@ -92,14 +92,16 @@ int main(int argc, char *argv[]) {
         buffer = (char *)malloc(filelen * sizeof(char)); // Enough memory for the file
         fread(buffer, filelen, 1, fileptr); // Read in the entire file
         fclose(fileptr); // Close the file
+        printf("File read\n");
 
         int num_packets = filelen / 1000 + (filelen % 1000 == 0 ? 0 : 1);
         struct packet packet_array[num_packets];
         serialize_file(num_packets, filelen, buffer, filename, packet_array);
-
+        
         
         for(int i=0; i<num_packets; i++){
-            char pre_pkt_string[150];
+            printf("Packet %d\n", i);
+            char pre_pkt_string[200];
             sprintf(pre_pkt_string, "%u:%u:%u:%s:", 
                 packet_array[i].total_frag, 
                 packet_array[i].frag_no, 
@@ -110,9 +112,11 @@ int main(int argc, char *argv[]) {
             int packet_len = strlen(pre_pkt_string) + packet_array[i].size;
             char pkt_string[packet_len];
             strcat(pkt_string, pre_pkt_string);
+            printf("string catted\n");
             for(int j =0; j< packet_array[i].size; j++){
                 pkt_string[strlen(pre_pkt_string) + j] = packet_array[i].filedata[j];
             }
+            printf("bytes copied\n");
 
             num_bytes = sendto(sockfd, (const char *)pkt_string, strlen(pkt_string), MSG_CONFIRM, (const struct sockaddr *) &servaddr, sizeof(servaddr));
 
@@ -122,6 +126,7 @@ int main(int argc, char *argv[]) {
                 printf("Sendto failed!");
                 exit(1);
             }
+
         
             // wait for ACK;
             num_bytes = recvfrom(sockfd, (char *)buffer, MAXLINE, 
@@ -137,6 +142,7 @@ int main(int argc, char *argv[]) {
             if (strcmp(buffer, "ACK") == 0){
                 printf("acknowledge received\n"); 
             }else{
+                printf("what the hell");
                 exit(1);
             }
 
