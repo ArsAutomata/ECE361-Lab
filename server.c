@@ -4,38 +4,99 @@
 #include <string.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <netdb.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
    
 #define MAXLINE 1250
+
 struct packet {  
     unsigned int total_frag;  
     unsigned int frag_no; 
     unsigned int size; 
     char* filename; 
     char filedata[1000];  
-};
+}; 
 
-void serialize_file(int num_packets, long len, char * file_stream, char * filename, struct packet * p_array){
-    for (int i=0; i < num_packets; i++){
-        struct packet pkt;
-        pkt.total_frag = num_packets;
-        pkt.frag_no = i+1;
-        pkt.filename = filename;
-        if (i == num_packets - 1){
-            // This is the last packet
-            pkt.size = len % 1000;
-        }else{
-            pkt.size = 1000; 
-        }
-        for (int j = 0; j < pkt.size; j++){
-                pkt.filedata[j] = file_stream[i*1000 + j];
+//parse the packet string
+struct packet parsepacket(char * filebuffer){
+    struct packet pkt;
+    int num_colons =0;
+    char total_frag[50];
+    char frag_no[50];
+    char size[50];
+    char filename[50];
+    int start_of_data = 0;
+    int start = 0;
+    
+    for(int i =0; i < 1250; i++){
+        if(filebuffer[i] == ':') {
+            if(num_colons == 0) {
+            total_frag[i] = '\0';
+            }else if(num_colons == 1) {
+                frag_no[i-start] = '\0';
+            }else if(num_colons == 2) {
+                size[i-start] = '\0';
+            }else if(num_colons == 3) {
+                filename[i-start] = '\0';
             }
-        p_array[i] = pkt;
-        fprintf(stderr, "array pkt size %d  pkt size %d", p_array[i].total_frag, pkt.total_frag);
+            start = i+1;
+            num_colons++;
+            continue;
+        
+        }
+        if(num_colons == 0) {
+            total_frag[i] = filebuffer[i];
+            
+        }else if(num_colons == 1) {
+            frag_no[i-start] = filebuffer[i];
+        }else if(num_colons == 2) {
+            size[i-start] = filebuffer[i];
+            
+        }else if(num_colons == 3) {
+            filename[i-start] = filebuffer[i];
+        }else if(num_colons == 4) {
+            start_of_data = i;
+            break;
+            
+        }
     }
-
+   
+    pkt.total_frag = atoi(total_frag); 
+    pkt.frag_no = atoi(frag_no); 
+    sscanf(size, "%d", &(pkt.size));
+    pkt.filename = filename;
+    int i = 0;
+    while(i < pkt.size){
+        pkt.filedata[i] = filebuffer[i + start_of_data];
+        i++;
+    }
+    return pkt; 
 }
+
+//write into given file
+/*void writepacket(char * filebuffer, char * filename){
+    FILE *fp; 
+   
+    if(fp == NULL)
+    {
+      printf("Error in file name");   
+      exit(1);
+    }
+    fp = fopen(filename, "w"); 
+    if(fp){
+        fwrite(filebuffer, sizeof(filebuffer), 1, fp); 
+        fclose(fp);
+    }else{
+        printf("Could not open file"); 
+        exit(1); 
+        fclose(fp);
+    }
+}
+*/
 
 //clear the buffer 
 void clearBuf(char* b)
@@ -45,146 +106,168 @@ void clearBuf(char* b)
         b[i] = '\0';
 }
 
-// Creates and binds a socket, then sends message and waits for response
+// Creates and binds a socket, then waits for message
 int main(int argc, char *argv[]) {
     int sockfd;
     char buffer[MAXLINE];
-    struct sockaddr_in servaddr;
+    struct sockaddr_in servaddr, cliaddr;
 
-    if (argc != 3) {
-        fprintf(stderr,"usage: deliver <server address> <server port number>\n");
+    if (argc != 2) {
+        fprintf(stderr,"usage: server <UDP listen port>\n");
         exit(1);
     }
-    char *server_address = argv[1];
-    int port = atoi(argv[2]);
-   
-    // socket file descriptor for IPv4
+    int port = atoi(argv[1]);
+       
+    // Creating socket file descriptor
     if ( (sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0 ) {
         perror("socket creation failed");
-        exit(1);
+        exit(EXIT_FAILURE);
     }
-   
+       
     memset(&servaddr, 0, sizeof(servaddr));
-       
-    // Filling server information
-    servaddr.sin_family = AF_INET;
-    servaddr.sin_port = htons(port);
-    servaddr.sin_addr.s_addr = inet_addr(server_address);
-       
-    int num_bytes;
-    socklen_t servaddr_len;
-    
-    printf("Please input the following command with the file you would like to transfer:\n(ftp <file name>)\n");
-    char filename[50];
+    memset(&cliaddr, 0, sizeof(cliaddr));
 
-    // Call twice to get both words
-    scanf("%s", filename);
-    if (strcmp(filename, "ftp") != 0){
-        printf("Usage: ftp <file name>");
+    // get IP address of local machine
+    char hostbuffer[256];
+    gethostname(hostbuffer, sizeof(hostbuffer));
+    char *IPbuffer;
+    struct hostent *host_entry;
+    host_entry = gethostbyname(hostbuffer);
+    IPbuffer = inet_ntoa(*((struct in_addr*) host_entry->h_addr_list[0]));
+    if (IPbuffer == NULL){ 
+        printf("Couldn't get IP of local machine"); 
         exit(1);
     }
-
-    // Get filename
-    scanf("%s", filename);
-    char *spacketnum;
-    char ACKbuffer[100];
-
-    // Check file existence and send message if exists / readable
-    if( access( filename, R_OK ) == 0 ) {
-        FILE *fileptr;
-        char *buffer;
-        long filelen;
-
-        fileptr = fopen(filename, "rb");  // Open the file in binary mode
-        fseek(fileptr, 0, SEEK_END);          // Jump to the end of the file
-        filelen = ftell(fileptr);             // Get the current byte offset in the file
-        rewind(fileptr);                      // Jump back to the beginning of the file
-
-        buffer = (char *)malloc(filelen * sizeof(char)); // Enough memory for the file
-        fread(buffer, filelen, 1, fileptr); // Read in the entire file
-        fclose(fileptr); // Close the file
-        printf("File read\n");
-
-        int num_packets = filelen / 1000 + (filelen % 1000 == 0 ? 0 : 1);
-        struct packet packet_array[num_packets];
-        serialize_file(num_packets, filelen, buffer, filename, packet_array);
-        
-        
-        char ACKbuffer[100];
-        char spacketnum; 
-        
-        for(int i=0; i<num_packets; i++){
-            char pre_pkt_string[200];
-            sprintf(pre_pkt_string, "%u:%u:%u:%s:", 
-                packet_array[i].total_frag, 
-                packet_array[i].frag_no, 
-                packet_array[i].size, 
-                packet_array[i].filename
-                );
+    
+    // Filling server information
+    servaddr.sin_family = AF_INET; // IPv4
+    servaddr.sin_addr.s_addr = inet_addr(IPbuffer);
+    servaddr.sin_port = htons(port);
+       
+    // Bind the socket with the server address
+    if ( bind(sockfd, (const struct sockaddr *)&servaddr, 
+            sizeof(servaddr)) < 0 )
+    {
+        perror("bind failed");
+        exit(EXIT_FAILURE);
+    }
+       
+    int len, num_bytes;
+    len = sizeof(cliaddr);  //len is value/result
+    
+    struct packet pkt;
+    
+    FILE *fp; 
+    
+    char* spacketnum; 
+    char ACKbuffer[120];  
+   
+    // Receive first packet
+        num_bytes = recvfrom(sockfd, (char *)buffer, MAXLINE, 
+                MSG_WAITALL, ( struct sockaddr *) &cliaddr,
+                &len);
+        // Check if something was received
+        if(num_bytes == -1){
+            printf("Recvfrom failed!");
+            //send no ack
+            char *NACK = "NACK";
+            sendto(sockfd, (const char *)NACK, strlen("NACK"), 
+            MSG_CONFIRM, (const struct sockaddr *) &cliaddr,
+                len);
+           
+            //notify and clear buffer
+            printf("NACK\n"); 
+            clearBuf(buffer);
+            exit(1);
+        }else{    
+            //process the packet
+            pkt = parsepacket(buffer); 
+               
+            //make ack for packet 
+            char *ACK = "ACK";
             
-
-            int packet_len = strlen(pre_pkt_string) + packet_array[i].size;            
-            char pkt_string[packet_len];
-            strcpy(pkt_string, pre_pkt_string);
-            for(int j =0; j< packet_array[i].size; j++){
-                pkt_string[strlen(pre_pkt_string) + j] = packet_array[i].filedata[j];
+            if (asprintf(&spacketnum, "%d", pkt.frag_no) == -1) {
+                perror("asprintf");
+            } else {
+                strcat(strcpy(ACKbuffer, ACK), spacketnum);
+                free(spacketnum);
             }
-
-            num_bytes = sendto(sockfd, (const char *)pkt_string, strlen(pkt_string), MSG_CONFIRM, (const struct sockaddr *) &servaddr, sizeof(servaddr));
-
-
-            // Ensure if something was sent
-            if(num_bytes == -1){
-                printf("Sendto failed!");
+            
+            fprintf(stderr, "\nSending ACK %d", pkt.frag_no);
+            
+            //send ACK
+            sendto(sockfd, (const char *)ACKbuffer, strlen(ACK), 
+            MSG_CONFIRM, (const struct sockaddr *) &cliaddr,
+                len);  
+            
+            
+            fp = fopen(pkt.filename, "w"); 
+            if (!fp){
+                fprintf(stderr,"Failed to create file");
                 exit(1);
             }
+            
+            
+            fwrite(pkt.filedata, 1, pkt.size, fp); 
+            fprintf(stderr,"\n");
+            clearBuf(buffer); 
+            printf("\npacket 1 delivered, %d packets remaining", (pkt.total_frag-1));
+        }
 
-        
-            // wait for ACK;
-            num_bytes = recvfrom(sockfd, (char *)buffer, MAXLINE, 
-                        MSG_WAITALL, (struct sockaddr *) &servaddr,
-                        &servaddr_len);
+    //process packets
+    for(int k = 1; k< pkt.total_frag; k++){
+        if (k >= 244){
+            fprintf(stderr, "%d %d", k, pkt.total_frag);
+        }
+        num_bytes = recvfrom(sockfd, (char *)buffer, MAXLINE, 
+                MSG_WAITALL, ( struct sockaddr *) &cliaddr,
+                &len);
+        // Check if something was received
+        if(num_bytes == -1){
+            printf("Recvfrom failed!");
+            //send no ack
+            char *NACK = "NACK";
+            sendto(sockfd, (const char *)NACK, strlen("NACK"), 
+            MSG_CONFIRM, (const struct sockaddr *) &cliaddr,
+                len);
+           
+            //notify and clear buffer
+            printf("NACK\n"); 
+            clearBuf(buffer);
+            exit(1);
+        }else{            
+            //process the packet
+            pkt = parsepacket(buffer); 
+           
+           
+            //make ack for packet 
+            char *ACK = "ACK";
             
-            // Check if something was received
-            if(num_bytes == -1){
-                printf("Recvfrom failed!");
-                exit(1);
-            }
-            buffer[num_bytes] = '\0';
-            
-            //check if correct ACK recieved
-            char* ACK = "ACK";
-            if (asprintf(&spacketnum, "%d", packet_array[i].frag_no) == -1) {
+            if (asprintf(&spacketnum, "%d", pkt.frag_no) == -1) {
                 perror("asprintf");
             } else {
                 strcat(strcpy(ACKbuffer, ACK), spacketnum);
                 free(spacketnum);
             }
            
-            if (strcmp(buffer, ACKbuffer) == 0){
-                printf("\npacket %d successfully sent", packet_array[i].frag_no); 
-            }else if (strcmp(buffer, "NACK") == 0){
-                printf("packet %d was not delivered, exiting\n", packet_array[i].frag_no);
-                exit(1);
-            }else{
-                fprintf(stderr, "yikes server error, did not send right message");
-                exit(1); 
-            }
-            
+            //send ACK
+            sendto(sockfd, (const char *)ACKbuffer, strlen(ACK), 
+            MSG_CONFIRM, (const struct sockaddr *) &cliaddr,
+                len);  
+            fprintf(stderr, "\nSending ACK %d", pkt.frag_no);
             clearBuf(ACKbuffer);
+           
+            fwrite(pkt.filedata, 1, pkt.size, fp); 
+            clearBuf(buffer); 
             
+            printf("\npacket %d delivered, %d packets remaining", pkt.frag_no, pkt.total_frag-pkt.frag_no);
         }
-
-        
-        
-    } else {
-        printf("The file does not exist or the pathname is incorrect");
-        exit(1);
+      
     }
+    fclose(fp);
+    fprintf(stderr,"Closing file\n");
     
-    
-    
-    // Close the file descriptor
+    //close the socket
     close(sockfd);
     return 0;
 }
