@@ -25,15 +25,16 @@ struct packet parsepacket(char * filebuffer){
     struct packet pkt;
     char * token; 
     
+
     token = strtok(filebuffer, ":");
     pkt.total_frag = atoi(token); 
-    token = strtok(filebuffer, ":");
+    token = strtok(NULL, ":");
     pkt.frag_no = atoi(token); 
-    token = strtok(filebuffer, ":");
+    token = strtok(NULL, ":");
     pkt.size = atoi(token); 
-    token = strtok(filebuffer, ":");
+    token = strtok(NULL, ":");
     pkt.filename = token; 
-    token = strtok(filebuffer, ":");
+    token = strtok(NULL, ":");
     strcpy(pkt.filedata, token);
     
     return pkt; 
