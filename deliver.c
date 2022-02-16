@@ -35,7 +35,6 @@ void create_packet_array(int num_packets, long len, char * file_stream, char * f
                 pkt.filedata[j] = file_stream[i*1000 + j];
             }
         p_array[i] = pkt;
-        fprintf(stderr, "array pkt size %d  pkt size %d", p_array[i].total_frag, pkt.total_frag);
     }
 
 }
@@ -170,7 +169,6 @@ int main(int argc, char *argv[]) {
                 perror("snprintf");
             } else {
                 strcat(strcpy(ACKbuffer, ACK), spacketnum);
-                free(spacketnum);
             }
            
             if (strcmp(buffer, ACKbuffer) == 0){

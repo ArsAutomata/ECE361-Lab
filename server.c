@@ -76,8 +76,9 @@ struct packet parsepacket(char * filebuffer){
    
     pkt.total_frag = atoi(total_frag); 
     pkt.frag_no = atoi(frag_no); 
-    sscanf(size, "%d", &(pkt.size));
-    pkt.filename = strcpy(pkt.filename, filename);
+    pkt.size = atoi(size);
+    pkt.filename = (char *)malloc(strlen(filename) + 1);
+    strcpy(pkt.filename, filename);
 
     // Copy the file data 
     int i = 0;
