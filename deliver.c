@@ -108,11 +108,16 @@ int main(int argc, char *argv[]) {
                 packet_array[i].size, 
                 packet_array[i].filename
                 );
+            
+            fprintf(stderr, "pissboy1\n");
 
             int packet_len = strlen(pre_pkt_string) + packet_array[i].size;
+            fprintf(stderr, "pissboy2\n");
+            
             char pkt_string[packet_len];
-            strcat(pkt_string, pre_pkt_string);
-            printf("string catted\n");
+            fprintf(stderr,"string here\n %s\n", pre_pkt_string);
+            strcpy(pkt_string, pre_pkt_string);
+            fprintf(stderr,"string catted\n %s\n", pkt_string);
             for(int j =0; j< packet_array[i].size; j++){
                 pkt_string[strlen(pre_pkt_string) + j] = packet_array[i].filedata[j];
             }

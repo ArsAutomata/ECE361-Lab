@@ -34,12 +34,8 @@ struct packet parsepacket(char * filebuffer){
     pkt.filename = name; 
     token = strtok(NULL, ":");
     for(int j =0; j < pkt.size; j++){
-        fprintf(stderr,"poooooo %d\n", j);
-        pkt.filedata[j] = 'h';
-        fprintf(stderr,"ggggg %d\n", j);
+        pkt.filedata[j] = token[j];
     }
-    fprintf(stderr,"peeeee");
-    free(token);
     return pkt; 
 }
 
@@ -128,7 +124,6 @@ int main(int argc, char *argv[]) {
         num_bytes = recvfrom(sockfd, (char *)buffer, MAXLINE, 
                 MSG_WAITALL, ( struct sockaddr *) &cliaddr,
                 &len);
-        fprintf(stderr,"shhiiii");
         // Check if something was received
         if(num_bytes == -1){
             printf("Recvfrom failed!");
@@ -156,8 +151,7 @@ int main(int argc, char *argv[]) {
             
             
             // fp = fopen(pkt.filename, "w"); 
-            fprintf(stderr, "fil enam e! %s\n", pkt.filename);
-            fp = fopen("mannn.txt", "w"); 
+            fp = fopen("mannn", "w"); 
             if (!fp){
                 fprintf(stderr,"Failed to create file");
                 exit(1);
@@ -165,17 +159,16 @@ int main(int argc, char *argv[]) {
             
             
             fwrite(pkt.filedata, 1, pkt.size, fp); 
-            fprintf(stderr,"1111111\n");
+            fprintf(stderr,"\n");
             clearBuf(buffer); 
         }
 
     //process packets
-    for(int k =0; k< pkt.total_frag; k++){
+    for(int k =1; k< pkt.total_frag; k++){
         
         num_bytes = recvfrom(sockfd, (char *)buffer, MAXLINE, 
                 MSG_WAITALL, ( struct sockaddr *) &cliaddr,
                 &len);
-        fprintf(stderr,"shhiiii");
         // Check if something was received
         if(num_bytes == -1){
             printf("Recvfrom failed!");
@@ -201,13 +194,12 @@ int main(int argc, char *argv[]) {
             //process the packet
             pkt = parsepacket(buffer); 
             fwrite(pkt.filedata, 1, pkt.size, fp); 
-            fprintf(stderr,"1111111\n");
             clearBuf(buffer); 
         }
       
     }
     fclose(fp);
-    fprintf(stderr,"closing\n");
+    fprintf(stderr,"Closing file\n");
     
     //close the socket
     close(sockfd);
