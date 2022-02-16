@@ -17,7 +17,7 @@ struct packet {
 };
 
 void serialize_file(int num_packets, long len, char * file_stream, char * filename, struct packet * p_array){
-    for (int i; i < num_packets; i++){
+    for (int i=0; i < num_packets; i++){
         struct packet pkt;
         pkt.total_frag = num_packets;
         pkt.frag_no = i+1;
@@ -32,6 +32,7 @@ void serialize_file(int num_packets, long len, char * file_stream, char * filena
                 pkt.filedata[j] = file_stream[i*1000 + j];
             }
         p_array[i] = pkt;
+        fprintf(stderr, "array pkt size %d  pkt size %d", p_array[i].total_frag, pkt.total_frag);
     }
 
 }
@@ -102,6 +103,10 @@ int main(int argc, char *argv[]) {
         for(int i=0; i<num_packets; i++){
             printf("Packet %d\n", i);
             char pre_pkt_string[200];
+            fprintf(stderr, "values: %d %d %d %s \n", packet_array[i].total_frag, 
+                packet_array[i].frag_no, 
+                packet_array[i].size, 
+                packet_array[i].filename);
             sprintf(pre_pkt_string, "%u:%u:%u:%s:", 
                 packet_array[i].total_frag, 
                 packet_array[i].frag_no, 
