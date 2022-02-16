@@ -101,12 +101,7 @@ int main(int argc, char *argv[]) {
         
         
         for(int i=0; i<num_packets; i++){
-            printf("Packet %d\n", i);
             char pre_pkt_string[200];
-            fprintf(stderr, "values: %d %d %d %s \n", packet_array[i].total_frag, 
-                packet_array[i].frag_no, 
-                packet_array[i].size, 
-                packet_array[i].filename);
             sprintf(pre_pkt_string, "%u:%u:%u:%s:", 
                 packet_array[i].total_frag, 
                 packet_array[i].frag_no, 
@@ -114,19 +109,13 @@ int main(int argc, char *argv[]) {
                 packet_array[i].filename
                 );
             
-            fprintf(stderr, "pissboy1\n");
 
-            int packet_len = strlen(pre_pkt_string) + packet_array[i].size;
-            fprintf(stderr, "pissboy2\n");
-            
+            int packet_len = strlen(pre_pkt_string) + packet_array[i].size;            
             char pkt_string[packet_len];
-            fprintf(stderr,"string here\n %s\n", pre_pkt_string);
             strcpy(pkt_string, pre_pkt_string);
-            fprintf(stderr,"string catted\n %s\n", pkt_string);
             for(int j =0; j< packet_array[i].size; j++){
                 pkt_string[strlen(pre_pkt_string) + j] = packet_array[i].filedata[j];
             }
-            printf("bytes copied\n");
 
             num_bytes = sendto(sockfd, (const char *)pkt_string, strlen(pkt_string), MSG_CONFIRM, (const struct sockaddr *) &servaddr, sizeof(servaddr));
 
@@ -150,12 +139,12 @@ int main(int argc, char *argv[]) {
             }
             buffer[num_bytes] = '\0';
             if (strcmp(buffer, "ACK") == 0){
-                printf("packet %d sent, sending packet %d next\n" packet_array[i].frag_no, packet_array[i+1].frag_no); 
+                printf("\npacket %d successfully sent", packet_array[i].frag_no); 
             }else if (strcmp(buffer, "NACK") == 0){
-                printf("packet %d was not delivered, exiting\n" packet_array[i].frag_no);
+                printf("packet %d was not delivered, exiting\n", packet_array[i].frag_no);
                 exit(1);
             }else{
-                fprintf("yikes server error, did not send right message");
+                fprintf(stderr, "yikes server error, did not send right message");
                 exit(1); 
             }
 

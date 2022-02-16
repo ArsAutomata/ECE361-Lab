@@ -27,44 +27,48 @@ struct packet parsepacket(char * filebuffer){
     char size[50];
     char filename[50];
     int start_of_data = 0;
+    int start = 0;
     
     for(int i =0; i < 1250; i++){
-        if(filebuffer[i] = ':') {
+        if(filebuffer[i] == ':') {
             if(num_colons == 0) {
-            total_frag[i+1] = '\0';
+            total_frag[i] = '\0';
             }else if(num_colons == 1) {
-                frag_no[i+1] = '\0';
+                frag_no[i-start] = '\0';
             }else if(num_colons == 2) {
-                size[i+1] = '\0';
+                size[i-start] = '\0';
             }else if(num_colons == 3) {
-                filename[i+1] = '\0';
+                filename[i-start] = '\0';
             }
+            start = i+1;
             num_colons++;
             continue;
         
         }
         if(num_colons == 0) {
             total_frag[i] = filebuffer[i];
+            
         }else if(num_colons == 1) {
-            frag_no[i] = filebuffer[i];
+            frag_no[i-start] = filebuffer[i];
         }else if(num_colons == 2) {
-            size[i] = filebuffer[i];
+            size[i-start] = filebuffer[i];
+            
         }else if(num_colons == 3) {
-            filename[i] = filebuffer[i];
+            filename[i-start] = filebuffer[i];
         }else if(num_colons == 4) {
             start_of_data = i;
             break;
             
         }
     }
-    sscanf(total_frag, "%d", &(pkt.total_frag)); 
-    sscanf(frag_no, "%d", &(pkt.frag_no)); 
-    pkt.size = atoi(size); 
+   
+    pkt.total_frag = atoi(total_frag); 
+    pkt.frag_no = atoi(frag_no); 
+    sscanf(size, "%d", &(pkt.size));
+    pkt.filename = filename;
     int i = 0;
-    fprintf(stderr,"%d fucking hell\n", pkt.size);
     while(i < pkt.size){
         pkt.filedata[i] = filebuffer[i + start_of_data];
-        fprintf(stderr,"\nhuh %d", i);
         i++;
     }
     return pkt; 
@@ -181,7 +185,7 @@ int main(int argc, char *argv[]) {
             
             
             // fp = fopen(pkt.filename, "w"); 
-            fp = fopen("hmm.txt", "w"); 
+            fp = fopen("hmm.jpg", "w"); 
             if (!fp){
                 fprintf(stderr,"Failed to create file");
                 exit(1);
@@ -191,12 +195,14 @@ int main(int argc, char *argv[]) {
             fwrite(pkt.filedata, 1, pkt.size, fp); 
             fprintf(stderr,"\n");
             clearBuf(buffer); 
-            printf("packet 1 delivered, %d packets remaining", pkt.frag_no, (pkt.total_frag-1));
+            printf("\npacket 1 delivered, %d packets remaining", (pkt.total_frag-1));
         }
 
     //process packets
-    for(int k =1; k< pkt.total_frag; k++){
-        
+    for(int k = 1; k< pkt.total_frag; k++){
+        if (k >= 244){
+            fprintf(stderr, "%d %d", k, pkt.total_frag);
+        }
         num_bytes = recvfrom(sockfd, (char *)buffer, MAXLINE, 
                 MSG_WAITALL, ( struct sockaddr *) &cliaddr,
                 &len);
@@ -219,14 +225,15 @@ int main(int argc, char *argv[]) {
             sendto(sockfd, (const char *)ACK, strlen(ACK), 
             MSG_CONFIRM, (const struct sockaddr *) &cliaddr,
                 len);
-            fprintf(stderr, "sending ack\n");
+            fprintf(stderr, "\nSending ACK");
             
             
             //process the packet
             pkt = parsepacket(buffer); 
             fwrite(pkt.filedata, 1, pkt.size, fp); 
             clearBuf(buffer); 
-            printf("packet %d delivered, %d packets remaining", pkt.frag_no, (pkt.total_frag-pkt.frag_no));
+            
+            printf("\npacket %d delivered, %d packets remaining", pkt.frag_no, pkt.total_frag-pkt.frag_no);
         }
       
     }
