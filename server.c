@@ -10,8 +10,6 @@
    
 #define MAXLINE 1250
 
-
-//Define the packet struct here
 struct packet {  
     unsigned int total_frag;  
     unsigned int frag_no; 
@@ -25,7 +23,6 @@ struct packet parsepacket(char * filebuffer){
     struct packet pkt;
     char * token; 
     
-
     token = strtok(filebuffer, ":");
     pkt.total_frag = atoi(token); 
     token = strtok(NULL, ":");
@@ -35,7 +32,9 @@ struct packet parsepacket(char * filebuffer){
     token = strtok(NULL, ":");
     pkt.filename = token; 
     token = strtok(NULL, ":");
+    fprintf(stderr,"poooooo");
     strcpy(pkt.filedata, token);
+    fprintf(stderr,"peeeee");
     
     return pkt; 
 }
@@ -120,15 +119,17 @@ int main(int argc, char *argv[]) {
     struct packet pkt;
     pkt.frag_no = 0; 
     pkt.total_frag = 0; 
+
+    FILE *fp; 
     
     //process packets
-    while(pkt.frag_no<=pkt.total_frag){
+    do{
         
         // Receive first packet
         num_bytes = recvfrom(sockfd, (char *)buffer, MAXLINE, 
                 MSG_WAITALL, ( struct sockaddr *) &cliaddr,
                 &len);
-        
+        fprintf(stderr,"shhiiii");
         // Check if something was received
         if(num_bytes == -1){
             printf("Recvfrom failed!");
@@ -148,15 +149,28 @@ int main(int argc, char *argv[]) {
             sendto(sockfd, (const char *)ACK, strlen(ACK), 
             MSG_CONFIRM, (const struct sockaddr *) &cliaddr,
                 len);
-            printf("ACK\n");
+            printf("hhhhhh");
+            fprintf(stderr, "sending ack\n");
+            
             
             //process the packet
-            parsepacket(buffer); 
-            writepacket(pkt.filedata, pkt.filename);
+            pkt = parsepacket(buffer); 
+            
+            if(pkt.frag_no == 0){
+                fp = fopen(pkt.filename, "w"); 
+                if (!fp){
+                    fprintf(stderr,"Failed to create file");
+                    exit(1);
+                }
+            }
+            fprintf(stderr,"1111111");
+            fwrite(pkt.filedata, 1, pkt.size, fp); 
+            
             clearBuf(buffer); 
         }
       
-    }
+    }while(pkt.frag_no<=pkt.total_frag);
+    fclose(fp);
     
     //close the socket
     close(sockfd);
