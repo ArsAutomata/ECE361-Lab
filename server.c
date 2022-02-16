@@ -8,7 +8,7 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
    
-#define MAXLINE 1000
+#define MAXLINE 1250
 
 
 //Define the packet struct here
@@ -44,6 +44,13 @@ struct packet parsepacket(char * filebuffer){
 void writepacket(char * filebuffer, char * filename){
     FILE *fp; 
     int fsize = strlen(filebuffer); 
+   
+   
+    if(fp == NULL)
+    {
+      printf("Error in file name!");   
+      exit(1);
+    }
     fp = fopen(filename, "w"); 
     if(fp){
         fwrite(filebuffer, fsize, 1, fp); 
@@ -130,6 +137,8 @@ int main(int argc, char *argv[]) {
             sendto(sockfd, (const char *)NACK, strlen("NACK"), 
             MSG_CONFIRM, (const struct sockaddr *) &cliaddr,
                 len);
+           
+            //notify and clear buffer
             printf("NACK\n"); 
             clearBuf(buffer);
             exit(1);
