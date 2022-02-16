@@ -184,8 +184,7 @@ int main(int argc, char *argv[]) {
             pkt = parsepacket(buffer); 
             
             
-            // fp = fopen(pkt.filename, "w"); 
-            fp = fopen("hmm.jpg", "w"); 
+            fp = fopen(pkt.filename, "w"); 
             if (!fp){
                 fprintf(stderr,"Failed to create file");
                 exit(1);
