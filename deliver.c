@@ -150,12 +150,14 @@ int main(int argc, char *argv[]) {
             }
             buffer[num_bytes] = '\0';
             if (strcmp(buffer, "ACK") == 0){
-                printf("acknowledge received\n"); 
-            }else{
-                printf("what the hell");
+                printf("packet %d sent, sending packet %d next\n" packet_array[i].frag_no, packet_array[i+1].frag_no); 
+            }else if (strcmp(buffer, "NACK") == 0){
+                printf("packet %d was not delivered, exiting\n" packet_array[i].frag_no);
                 exit(1);
+            }else{
+                fprintf("yikes server error, did not send right message");
+                exit(1); 
             }
-
 
         }
 
