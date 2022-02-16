@@ -32,7 +32,11 @@ struct packet parsepacket(char * filebuffer){
     int start_of_data = 0;
     int start = 0;
     
+    // Parse through the entire buffer
     for(int i =0; i < 1250; i++){
+
+        // Change the starting offset each time a colon is reached
+        // Append a null character as well to create a C string 
         if(filebuffer[i] == ':') {
             if(num_colons == 0) {
             total_frag[i] = '\0';
@@ -48,17 +52,22 @@ struct packet parsepacket(char * filebuffer){
             continue;
         
         }
+
+        // Depending on how many colons have been passed, copy the byte data into the respective buffer
         if(num_colons == 0) {
             total_frag[i] = filebuffer[i];
-            
+
         }else if(num_colons == 1) {
             frag_no[i-start] = filebuffer[i];
+
         }else if(num_colons == 2) {
             size[i-start] = filebuffer[i];
             
         }else if(num_colons == 3) {
             filename[i-start] = filebuffer[i];
+
         }else if(num_colons == 4) {
+            // Break out of the for loop and store where the file data starts in the buffer
             start_of_data = i;
             break;
             
@@ -68,7 +77,9 @@ struct packet parsepacket(char * filebuffer){
     pkt.total_frag = atoi(total_frag); 
     pkt.frag_no = atoi(frag_no); 
     sscanf(size, "%d", &(pkt.size));
-    pkt.filename = filename;
+    pkt.filename = strcpy(pkt.filename, filename);
+
+    // Copy the file data 
     int i = 0;
     while(i < pkt.size){
         pkt.filedata[i] = filebuffer[i + start_of_data];
@@ -76,27 +87,6 @@ struct packet parsepacket(char * filebuffer){
     }
     return pkt; 
 }
-
-//write into given file
-/*void writepacket(char * filebuffer, char * filename){
-    FILE *fp; 
-   
-    if(fp == NULL)
-    {
-      printf("Error in file name");   
-      exit(1);
-    }
-    fp = fopen(filename, "w"); 
-    if(fp){
-        fwrite(filebuffer, sizeof(filebuffer), 1, fp); 
-        fclose(fp);
-    }else{
-        printf("Could not open file"); 
-        exit(1); 
-        fclose(fp);
-    }
-}
-*/
 
 //clear the buffer 
 void clearBuf(char* b)
@@ -106,7 +96,8 @@ void clearBuf(char* b)
         b[i] = '\0';
 }
 
-// Creates and binds a socket, then waits for message
+// Creates and binds a socket, then waits for the first packet to open a file and start writing data to it. 
+// On last packet, write the data and close the file descriptor
 int main(int argc, char *argv[]) {
     int sockfd;
     char buffer[MAXLINE];
@@ -156,72 +147,74 @@ int main(int argc, char *argv[]) {
     len = sizeof(cliaddr);  //len is value/result
     
     struct packet pkt;
-    
     FILE *fp; 
-    
-    char* spacketnum; 
+    char* spacketnum = malloc(10); 
     char ACKbuffer[120];  
    
     // Receive first packet
-        num_bytes = recvfrom(sockfd, (char *)buffer, MAXLINE, 
-                MSG_WAITALL, ( struct sockaddr *) &cliaddr,
-                &len);
-        // Check if something was received
-        if(num_bytes == -1){
-            printf("Recvfrom failed!");
-            //send no ack
-            char *NACK = "NACK";
-            sendto(sockfd, (const char *)NACK, strlen("NACK"), 
+    num_bytes = recvfrom(sockfd, (char *)buffer, MAXLINE, 
+            MSG_WAITALL, ( struct sockaddr *) &cliaddr,
+            &len);
+
+    // Check if something was received
+    if(num_bytes == -1){
+        printf("Recvfrom failed!");
+
+        // Send no ack
+        char *NACK = "NACK";
+        sendto(sockfd, (const char *)NACK, strlen("NACK"), 
             MSG_CONFIRM, (const struct sockaddr *) &cliaddr,
-                len);
+            len);
            
-            //notify and clear buffer
-            printf("NACK\n"); 
-            clearBuf(buffer);
-            exit(1);
+        // Notify and clear buffer
+        printf("NACK\n"); 
+        clearBuf(buffer);
+        exit(1);
+
         }else{    
-            //process the packet
+            // Process the first packet
             pkt = parsepacket(buffer); 
                
-            //make ack for packet 
+            // Create ACK 
             char *ACK = "ACK";
-            
-            if (asprintf(&spacketnum, "%d", pkt.frag_no) == -1) {
-                perror("asprintf");
+            if (snprintf(spacketnum, 10, "%d", pkt.frag_no) >= 10) {
+                // truncation occured; Lost data because buffer was too small
+                perror("snprintf");
             } else {
+
+                // Concatenate the packet number with string "ACK"
                 strcat(strcpy(ACKbuffer, ACK), spacketnum);
                 free(spacketnum);
             }
             
             fprintf(stderr, "\nSending ACK %d", pkt.frag_no);
-            
-            //send ACK
-            sendto(sockfd, (const char *)ACKbuffer, strlen(ACK), 
-            MSG_CONFIRM, (const struct sockaddr *) &cliaddr,
-                len);  
-            
-            
+
+            // Send ACK
+            sendto(sockfd, (const char *)ACKbuffer, strlen(ACKbuffer),
+                   MSG_CONFIRM, (const struct sockaddr *)&cliaddr,
+                   len);
+
+            // Open filename now that first packet has been received
             fp = fopen(pkt.filename, "w"); 
             if (!fp){
                 fprintf(stderr,"Failed to create file");
                 exit(1);
             }
             
-            
+            // Write to the file 
             fwrite(pkt.filedata, 1, pkt.size, fp); 
-            fprintf(stderr,"\n");
             clearBuf(buffer); 
             printf("\npacket 1 delivered, %d packets remaining", (pkt.total_frag-1));
         }
 
-    //process packets
+    // Process all remaining packets
     for(int k = 1; k< pkt.total_frag; k++){
-        if (k >= 244){
-            fprintf(stderr, "%d %d", k, pkt.total_frag);
-        }
+
+        // Receive the packet
         num_bytes = recvfrom(sockfd, (char *)buffer, MAXLINE, 
                 MSG_WAITALL, ( struct sockaddr *) &cliaddr,
                 &len);
+
         // Check if something was received
         if(num_bytes == -1){
             printf("Recvfrom failed!");
@@ -235,28 +228,33 @@ int main(int argc, char *argv[]) {
             printf("NACK\n"); 
             clearBuf(buffer);
             exit(1);
+
         }else{            
-            //process the packet
+            // Process the packet
             pkt = parsepacket(buffer); 
            
            
-            //make ack for packet 
+            // Create ACK  
             char *ACK = "ACK";
-            
-            if (asprintf(&spacketnum, "%d", pkt.frag_no) == -1) {
-                perror("asprintf");
-            } else {
+            char *spacketnum = malloc(10);
+
+            if (snprintf(spacketnum, 10, "%d", pkt.frag_no) >= 10){
+                // truncation occured
+                perror("snprintf");
+            }else{
                 strcat(strcpy(ACKbuffer, ACK), spacketnum);
                 free(spacketnum);
             }
-           
-            //send ACK
-            sendto(sockfd, (const char *)ACKbuffer, strlen(ACK), 
-            MSG_CONFIRM, (const struct sockaddr *) &cliaddr,
+
+            // Send ACK
+            sendto(sockfd, (const char *)ACKbuffer, strlen(ACKbuffer), 
+                MSG_CONFIRM, (const struct sockaddr *) &cliaddr,
                 len);  
+
             fprintf(stderr, "\nSending ACK %d", pkt.frag_no);
             clearBuf(ACKbuffer);
            
+            // Write to file
             fwrite(pkt.filedata, 1, pkt.size, fp); 
             clearBuf(buffer); 
             

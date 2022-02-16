@@ -16,12 +16,15 @@ struct packet {
     char filedata[1000];  
 };
 
-void serialize_file(int num_packets, long len, char * file_stream, char * filename, struct packet * p_array){
+// For each packet, create it and store the bytes, and put the packet in an array 
+void create_packet_array(int num_packets, long len, char * file_stream, char * filename, struct packet * p_array){
     for (int i=0; i < num_packets; i++){
         struct packet pkt;
         pkt.total_frag = num_packets;
         pkt.frag_no = i+1;
         pkt.filename = filename;
+
+        // The size is 1000 bytes unless it is the last packet which will be the remaining amount
         if (i == num_packets - 1){
             // This is the last packet
             pkt.size = len % 1000;
@@ -95,25 +98,32 @@ int main(int argc, char *argv[]) {
         char *buffer;
         long filelen;
 
-        fileptr = fopen(filename, "rb");  // Open the file in binary mode
-        fseek(fileptr, 0, SEEK_END);          // Jump to the end of the file
-        filelen = ftell(fileptr);             // Get the current byte offset in the file
-        rewind(fileptr);                      // Jump back to the beginning of the file
+        // Open the file in binary mode and jump to EOF
+        // Get the byte offset which is now the length of whole file
+        // Go back to beginning of file
+        fileptr = fopen(filename, "rb");  
+        fseek(fileptr, 0, SEEK_END);          
+        filelen = ftell(fileptr);             
+        rewind(fileptr);                      
 
-        buffer = (char *)malloc(filelen * sizeof(char)); // Enough memory for the file
-        fread(buffer, filelen, 1, fileptr); // Read in the entire file
-        fclose(fileptr); // Close the file
+        // Create a big enough buffer and read in all the bytes
+        // Then close file
+        buffer = (char *)malloc(filelen * sizeof(char));
+        fread(buffer, filelen, 1, fileptr);
+        fclose(fileptr);
         printf("File read\n");
 
+        // Get the number of packets needed and create the packet array 
         int num_packets = filelen / 1000 + (filelen % 1000 == 0 ? 0 : 1);
         struct packet packet_array[num_packets];
-        serialize_file(num_packets, filelen, buffer, filename, packet_array);
-        
+        create_packet_array(num_packets, filelen, buffer, filename, packet_array);
         
         char ACKbuffer[100];
-        char spacketnum; 
+        char* spacketnum = malloc(10); 
         
         for(int i=0; i<num_packets; i++){
+
+            // Create the packet string without the file data
             char pre_pkt_string[200];
             sprintf(pre_pkt_string, "%u:%u:%u:%s:", 
                 packet_array[i].total_frag, 
@@ -122,16 +132,18 @@ int main(int argc, char *argv[]) {
                 packet_array[i].filename
                 );
             
-
+            // Allocate a string with enough space for all the data and its metadata
             int packet_len = strlen(pre_pkt_string) + packet_array[i].size;            
             char pkt_string[packet_len];
             strcpy(pkt_string, pre_pkt_string);
+
+            // Copy the file data into the packet string
             for(int j =0; j< packet_array[i].size; j++){
                 pkt_string[strlen(pre_pkt_string) + j] = packet_array[i].filedata[j];
             }
 
+            // Send the packet string
             num_bytes = sendto(sockfd, (const char *)pkt_string, strlen(pkt_string), MSG_CONFIRM, (const struct sockaddr *) &servaddr, sizeof(servaddr));
-
 
             // Ensure if something was sent
             if(num_bytes == -1){
@@ -139,8 +151,7 @@ int main(int argc, char *argv[]) {
                 exit(1);
             }
 
-        
-            // wait for ACK;
+            // Wait for ACK;
             num_bytes = recvfrom(sockfd, (char *)buffer, MAXLINE, 
                         MSG_WAITALL, (struct sockaddr *) &servaddr,
                         &servaddr_len);
@@ -154,8 +165,9 @@ int main(int argc, char *argv[]) {
             
             //check if correct ACK recieved
             char* ACK = "ACK";
-            if (asprintf(&spacketnum, "%d", packet_array[i].frag_no) == -1) {
-                perror("asprintf");
+            if (snprintf(spacketnum, 10, "%d", packet_array[i].frag_no) >= 10) {
+                // truncation occured in snprintf
+                perror("snprintf");
             } else {
                 strcat(strcpy(ACKbuffer, ACK), spacketnum);
                 free(spacketnum);
@@ -181,8 +193,6 @@ int main(int argc, char *argv[]) {
         printf("The file does not exist or the pathname is incorrect");
         exit(1);
     }
-    
-    
     
     // Close the file descriptor
     close(sockfd);
