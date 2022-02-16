@@ -14,10 +14,9 @@ struct packet {
     unsigned int size; 
     char* filename; 
     char filedata[1000];  
-}
+};
 
-const void * serialize_file(int num_packets, long len, char * file_stream, char * filename){
-    struct packet p_array[num_packets];
+void serialize_file(int num_packets, long len, char * file_stream, char * filename, struct packet * p_array){
     for (int i; i < num_packets; i++){
         struct packet pkt;
         pkt.total_frag = num_packets;
@@ -26,14 +25,14 @@ const void * serialize_file(int num_packets, long len, char * file_stream, char 
         if (i == num_packets - 1){
             // This is the last packet
             pkt.size = len % 1000;
-            pkt.filedata = file_stream + (num_packets-2)*1000 +pkt.size;
         }else{
-            pkt.size = 1000;
-            pkt.filedata = file_stream + i*1000;
+            pkt.size = 1000; 
         }
+        for (int j = 0; j < pkt.size; j++){
+                pkt.filedata[j] = file_stream[i*1000 + j];
+            }
         p_array[i] = pkt;
     }
-    return p_array;
 
 }
 
@@ -94,16 +93,14 @@ int main(int argc, char *argv[]) {
         fread(buffer, filelen, 1, fileptr); // Read in the entire file
         fclose(fileptr); // Close the file
 
-        int num_packets = len / 1000 + (len % 1000 == 0 ? 0 : 1);
-        struct packet packet_array[num_packets] = serialize_file(num_packets, filelen, buffer, filename);
+        int num_packets = filelen / 1000 + (filelen % 1000 == 0 ? 0 : 1);
+        struct packet packet_array[num_packets];
+        serialize_file(num_packets, filelen, buffer, filename, packet_array);
 
         
-        for(int i=0; i<len; i++){
-            // for each packet in array: sendto(); 
-            // num_bytes = sendto(sockfd, (const char *)ftp, strlen(ftp),
-            // MSG_CONFIRM, (const struct sockaddr *) &servaddr, 
-            //     sizeof(servaddr));
-            char * pre_pkt_string = sprintf("%d:%d:%d:%s:", 
+        for(int i=0; i<num_packets; i++){
+            char pre_pkt_string[150];
+            sprintf(pre_pkt_string, "%u:%u:%u:%s:", 
                 packet_array[i].total_frag, 
                 packet_array[i].frag_no, 
                 packet_array[i].size, 
@@ -111,7 +108,7 @@ int main(int argc, char *argv[]) {
                 );
 
             int packet_len = strlen(pre_pkt_string) + packet_array[i].size;
-            char pkt_string[packet_len] = "";
+            char pkt_string[packet_len];
             strcat(pkt_string, pre_pkt_string);
             for(int j =0; j< packet_array[i].size; j++){
                 pkt_string[strlen(pre_pkt_string) + j] = packet_array[i].filedata[j];
@@ -137,7 +134,7 @@ int main(int argc, char *argv[]) {
                 exit(1);
             }
             buffer[num_bytes] = '\0';
-            if (strcmp(buffer, "ack") == 0){
+            if (strcmp(buffer, "ACK") == 0){
                 printf("acknowledge received\n"); 
             }else{
                 exit(1);
