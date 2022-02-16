@@ -37,6 +37,14 @@ void serialize_file(int num_packets, long len, char * file_stream, char * filena
 
 }
 
+//clear the buffer 
+void clearBuf(char* b)
+{
+    int i;
+    for (i = 0; i < strlen(b); i++)
+        b[i] = '\0';
+}
+
 // Creates and binds a socket, then sends message and waits for response
 int main(int argc, char *argv[]) {
     int sockfd;
@@ -78,6 +86,8 @@ int main(int argc, char *argv[]) {
 
     // Get filename
     scanf("%s", filename);
+    char *spacketnum;
+    char ACKbuffer[100];
 
     // Check file existence and send message if exists / readable
     if( access( filename, R_OK ) == 0 ) {
@@ -99,6 +109,9 @@ int main(int argc, char *argv[]) {
         struct packet packet_array[num_packets];
         serialize_file(num_packets, filelen, buffer, filename, packet_array);
         
+        
+        char ACKbuffer[100];
+        char spacketnum; 
         
         for(int i=0; i<num_packets; i++){
             char pre_pkt_string[200];
@@ -138,7 +151,17 @@ int main(int argc, char *argv[]) {
                 exit(1);
             }
             buffer[num_bytes] = '\0';
-            if (strcmp(buffer, "ACK") == 0){
+            
+            //check if correct ACK recieved
+            char* ACK = "ACK";
+            if (asprintf(&spacketnum, "%d", packet_array[i].frag_no) == -1) {
+                perror("asprintf");
+            } else {
+                strcat(strcpy(ACKbuffer, ACK), spacketnum);
+                free(spacketnum);
+            }
+           
+            if (strcmp(buffer, ACKbuffer) == 0){
                 printf("\npacket %d successfully sent", packet_array[i].frag_no); 
             }else if (strcmp(buffer, "NACK") == 0){
                 printf("packet %d was not delivered, exiting\n", packet_array[i].frag_no);
@@ -147,7 +170,9 @@ int main(int argc, char *argv[]) {
                 fprintf(stderr, "yikes server error, did not send right message");
                 exit(1); 
             }
-
+            
+            clearBuf(ACKbuffer);
+            
         }
 
         
