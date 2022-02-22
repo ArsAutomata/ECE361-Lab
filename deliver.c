@@ -7,6 +7,7 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/time.h>
+#include <poll.h>
    
 #define MAXLINE 1250
 struct packet {  
@@ -119,10 +120,21 @@ int main(int argc, char *argv[]) {
         create_packet_array(num_packets, filelen, buffer, filename, packet_array);
         
         char ACKbuffer[100];
-        char* spacketnum = malloc(10); 
-        
-        for(int i=0; i<num_packets; i++){
+        char* spacketnum = malloc(10);
 
+        // RTT related variables
+        double Est_rtt = 0.500;
+        double Dev_rtt = 0.100;
+        double timeout_interval = Est_rtt + 4 * Dev_rtt;
+        double rtt;
+        struct pollfd pfds[1];
+        pdfs[0].fd = sockfd;
+        pdfs[0].events = POLLIN;
+        struct timeval t_start;
+        struct timeval t_end;
+
+        for(int i=0; i<num_packets; i++){
+            int retransmitted = 0;
             // Create the packet string without the file data
             char pre_pkt_string[200];
             sprintf(pre_pkt_string, "%u:%u:%u:%s:", 
@@ -142,32 +154,60 @@ int main(int argc, char *argv[]) {
                 pkt_string[strlen(pre_pkt_string) + j] = packet_array[i].filedata[j];
             }
 
-            // Send the packet string
-            struct timeval t_start;
-            gettimeofday(&t_start, NULL);
-            num_bytes = sendto(sockfd, (const char *)pkt_string, packet_len, MSG_CONFIRM, (const struct sockaddr *) &servaddr, sizeof(servaddr));
+            // Always reset the timed_out value to false
+            int timed_out = 0;
+                        
+            // Send a packet and retransmit if receiving the ACK timed_out
+            do{
+                // If it has timed out, print the retransmitting message and change the retransmitted var so that rtt values for this segment won't be used
+                if (timed_out) {
+                    printf("Retransmitting!"); 
+                    retransmitted = 1;
+                }
+                
+                // Send the packet and record the start time
+                gettimeofday(&t_start, NULL);
+                num_bytes = sendto(sockfd, (const char *)pkt_string, packet_len, MSG_CONFIRM, (const struct sockaddr *) &servaddr, sizeof(servaddr));
 
+                // Poll to watch for data ready to be received on our socket file descriptor 
+                int num_events = poll(pdfs, 1, timeout_interval);
+                if(num_events == 0){ 
+                    // Nothing happened; Never received ACK
+                    timed_out = true;
 
-            // Ensure if something was sent
-            if(num_bytes == -1){
-                printf("Sendto failed!");
-                exit(1);
+                }else{
+                    // Received ACK
+                    timed_out = false;
+                    num_bytes = recvfrom(sockfd, (char *)buffer, MAXLINE,
+                                     MSG_WAITALL, (struct sockaddr *)&servaddr,
+                                     &servaddr_len);
+
+                    // Record end time and calculate rtt
+                    gettimeofday(&t_end, NULL);
+                    rtt = (t_end.tv_sec - t_start.tv_sec)*1000 + (t_end.tv_usec - t_start.tv_usec)/1000.0;
+
+                    // Check if something was received
+                    if(num_bytes == -1){
+                        printf("Recvfrom failed!");
+                        exit(1);
+                    }  
+                }
+
+            }while(timed_out == 0);
+            // Recalculate the ACK_timer using double t
+            if (!retransmitted){
+                Est_rtt = 0.875*Est_rtt + 0.125*rtt;
+                Dev_rtt = 0.75*Dev_rtt +0.25*abs(rtt-Est_rtt);
+                timeout_interval = Est_rtt + 4*Dev_rtt;
             }
 
-            // Wait for ACK;
-            num_bytes = recvfrom(sockfd, (char *)buffer, MAXLINE, 
-                        MSG_WAITALL, (struct sockaddr *) &servaddr,
-                        &servaddr_len);
-            struct timeval t_end;
-            gettimeofday(&t_end, NULL);
-            double t = (t_end.tv_sec - t_start.tv_sec)*1000 + (t_end.tv_usec - t_start.tv_usec)/1000.0;
+            
+
+            // gettimeofday(&t_end, NULL);
+            // double rtt = (t_end.tv_sec - t_start.tv_sec)*1000 + (t_end.tv_usec - t_start.tv_usec)/1000.0;
             fprintf(stderr, "RTT: %f\n", t);
 
-                        // Check if something was received
-            if(num_bytes == -1){
-                printf("Recvfrom failed!");
-                exit(1);
-            }
+            
             buffer[num_bytes] = '\0';
             
             //check if correct ACK recieved
