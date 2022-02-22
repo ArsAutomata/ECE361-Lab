@@ -6,6 +6,7 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
+#include <sys/time.h>
    
 #define MAXLINE 1250
 struct packet {  
@@ -32,8 +33,8 @@ void create_packet_array(int num_packets, long len, char * file_stream, char * f
             pkt.size = 1000; 
         }
         for (int j = 0; j < pkt.size; j++){
-                pkt.filedata[j] = file_stream[i*1000 + j];
-            }
+            pkt.filedata[j] = file_stream[i*1000 + j];
+        }
         p_array[i] = pkt;
     }
 
@@ -108,13 +109,13 @@ int main(int argc, char *argv[]) {
         // Create a big enough buffer and read in all the bytes
         // Then close file
         buffer = (char *)malloc(filelen * sizeof(char));
-        fread(buffer, filelen, 1, fileptr);
+        fread(buffer, sizeof(char), filelen, fileptr);
         fclose(fileptr);
         printf("File read\n");
 
         // Get the number of packets needed and create the packet array 
         int num_packets = filelen / 1000 + (filelen % 1000 == 0 ? 0 : 1);
-        struct packet packet_array[num_packets];
+        struct packet* packet_array = malloc(num_packets*sizeof(struct packet));
         create_packet_array(num_packets, filelen, buffer, filename, packet_array);
         
         char ACKbuffer[100];
@@ -133,7 +134,7 @@ int main(int argc, char *argv[]) {
             
             // Allocate a string with enough space for all the data and its metadata
             int packet_len = strlen(pre_pkt_string) + packet_array[i].size;            
-            char pkt_string[packet_len];
+            char pkt_string[2000];
             strcpy(pkt_string, pre_pkt_string);
 
             // Copy the file data into the packet string
@@ -142,7 +143,10 @@ int main(int argc, char *argv[]) {
             }
 
             // Send the packet string
-            num_bytes = sendto(sockfd, (const char *)pkt_string, strlen(pkt_string), MSG_CONFIRM, (const struct sockaddr *) &servaddr, sizeof(servaddr));
+            struct timeval t_start;
+            gettimeofday(&t_start, NULL);
+            num_bytes = sendto(sockfd, (const char *)pkt_string, packet_len, MSG_CONFIRM, (const struct sockaddr *) &servaddr, sizeof(servaddr));
+
 
             // Ensure if something was sent
             if(num_bytes == -1){
@@ -154,8 +158,12 @@ int main(int argc, char *argv[]) {
             num_bytes = recvfrom(sockfd, (char *)buffer, MAXLINE, 
                         MSG_WAITALL, (struct sockaddr *) &servaddr,
                         &servaddr_len);
-            
-            // Check if something was received
+            struct timeval t_end;
+            gettimeofday(&t_end, NULL);
+            double t = (t_end.tv_sec - t_start.tv_sec)*1000 + (t_end.tv_usec - t_start.tv_usec)/1000.0;
+            fprintf(stderr, "RTT: %f\n", t);
+
+                        // Check if something was received
             if(num_bytes == -1){
                 printf("Recvfrom failed!");
                 exit(1);
