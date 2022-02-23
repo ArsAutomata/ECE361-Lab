@@ -209,7 +209,7 @@ int main(int argc, char *argv[]) {
         }
 
     // Process all remaining packets
-    while(pkt.frag_no <= pkt.total_frag){
+    for(int k = 1; k< pkt.total_frag; k++){
 
         // Receive the packet
         num_bytes = recvfrom(sockfd, (char *)buffer, MAXLINE, 
@@ -230,13 +230,6 @@ int main(int argc, char *argv[]) {
             clearBuf(buffer);
             exit(1);
 
-
-        // Check whether to drop packet
-        }else if (rand()%100 == 67){
-            // 1/100 chance 
-            // Drop packet; Just do nothing
-            printf("Packet drop!");
-        
         }else{            
             // Process the packet
             pkt = parsepacket(buffer); 

@@ -128,8 +128,8 @@ int main(int argc, char *argv[]) {
         double timeout_interval = Est_rtt + 4 * Dev_rtt;
         double rtt;
         struct pollfd pfds[1];
-        pfds[0].fd = sockfd;
-        pfds[0].events = POLLIN;
+        pdfs[0].fd = sockfd;
+        pdfs[0].events = POLLIN;
         struct timeval t_start;
         struct timeval t_end;
 
@@ -170,14 +170,14 @@ int main(int argc, char *argv[]) {
                 num_bytes = sendto(sockfd, (const char *)pkt_string, packet_len, MSG_CONFIRM, (const struct sockaddr *) &servaddr, sizeof(servaddr));
 
                 // Poll to watch for data ready to be received on our socket file descriptor 
-                int num_events = poll(pfds, 1, timeout_interval);
+                int num_events = poll(pdfs, 1, timeout_interval);
                 if(num_events == 0){ 
                     // Nothing happened; Never received ACK
-                    timed_out = 1;
+                    timed_out = true;
 
                 }else{
                     // Received ACK
-                    timed_out = 0;
+                    timed_out = false;
                     num_bytes = recvfrom(sockfd, (char *)buffer, MAXLINE,
                                      MSG_WAITALL, (struct sockaddr *)&servaddr,
                                      &servaddr_len);
@@ -205,7 +205,7 @@ int main(int argc, char *argv[]) {
 
             // gettimeofday(&t_end, NULL);
             // double rtt = (t_end.tv_sec - t_start.tv_sec)*1000 + (t_end.tv_usec - t_start.tv_usec)/1000.0;
-            fprintf(stderr, "RTT: %f\n", rtt);
+            fprintf(stderr, "RTT: %f\n", t);
 
             
             buffer[num_bytes] = '\0';
