@@ -205,11 +205,11 @@ int main(int argc, char *argv[]) {
             // Write to the file 
             fwrite(pkt.filedata, 1, pkt.size, fp); 
             clearBuf(buffer); 
-            printf("\npacket 1 delivered, %d packets remaining", (pkt.total_frag-1));
+            fprintf(stderr, "\npacket 1 delivered, %d packets remaining", (pkt.total_frag-1));
         }
 
     // Process all remaining packets
-    for(int k = 1; k< pkt.total_frag; k++){
+    while(pkt.frag_no < pkt.total_frag){
 
         // Receive the packet
         num_bytes = recvfrom(sockfd, (char *)buffer, MAXLINE, 
@@ -230,6 +230,9 @@ int main(int argc, char *argv[]) {
             clearBuf(buffer);
             exit(1);
 
+        }else if(rand()%100 == 67){
+            //Drop the packet and do nothing
+            fprintf(stderr, "\nPacket dropped!");
         }else{            
             // Process the packet
             pkt = parsepacket(buffer); 
@@ -259,7 +262,7 @@ int main(int argc, char *argv[]) {
             fwrite(pkt.filedata, 1, pkt.size, fp); 
             clearBuf(buffer); 
             
-            printf("\npacket %d delivered, %d packets remaining", pkt.frag_no, pkt.total_frag-pkt.frag_no);
+            fprintf(stderr,"\npacket %d delivered, %d packets remaining", pkt.frag_no, pkt.total_frag-pkt.frag_no);
         }
       
     }
