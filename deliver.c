@@ -170,7 +170,7 @@ int main(int argc, char *argv[]) {
                 num_bytes = sendto(sockfd, (const char *)pkt_string, packet_len, MSG_CONFIRM, (const struct sockaddr *) &servaddr, sizeof(servaddr));
 
                 // Poll to watch for data ready to be received on our socket file descriptor 
-                int num_events = poll(pfds, 1, 1);
+                int num_events = poll(pfds, 1, (int)timeout_interval+1);
                 if(num_events == 0){ 
                     // Nothing happened; Never received ACK
                     timed_out = 1;
