@@ -267,7 +267,7 @@ int main(int argc, char *argv[]) {
       
     }
     fclose(fp);
-    fprintf(stderr,"Closing file\n");
+    fprintf(stderr,"\nClosing file\n");
     
     //close the socket
     close(sockfd);
