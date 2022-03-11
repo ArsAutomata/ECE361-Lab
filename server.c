@@ -10,25 +10,75 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <sys/fcntl.h> 
    
 #define MAXLINE 1250
 
-struct packet {  
-    unsigned int total_frag;  
-    unsigned int frag_no; 
+// Linked list implementation
+
+
+
+char ID_arr[5][50] = {
+    "pete",
+    "julia",
+    "luigi",
+    "mr.cow",
+    "piss"
+};
+char pw_arr[5][20] = {
+    "1234ttyu",
+    "3456gv",
+    "password3",
+    "mr.password",
+    "peeword"
+};
+
+struct client {
+    char ID[50];
+    char pw[20];
+    char session_ID[50];
+    struct sockaddr_in
+
+}
+
+struct message {  
+    unsigned int type;  
     unsigned int size; 
-    char* filename; 
-    char filedata[1000];  
+    unsigned char source[50]; 
+    unsigned char data[1000];  
 }; 
 
+struct Session_Info{
+    struct client logged_in_list[5];
+    char conf_session_id[5][50];
+    struct client conf_sessions[5][5];
+}
+
+
+enum TYPES{
+    LOGIN,
+    LO_ACK,
+    LO_NAK,
+    EXIT,
+    JOIN,
+    JN_ACK,
+    JN_NAK,
+    LEAVE_SESS,
+    NEW_SESS,
+    NS_ACK,
+    MESSAGE,
+    QUERY,
+    QU_ACK
+};
+
 //parse the packet string
-struct packet parsepacket(char * filebuffer){
-    struct packet pkt;
+struct packet parsemsg(char * msg){
+    struct message pkt;
     int num_colons =0;
-    char total_frag[50];
-    char frag_no[50];
-    char size[50];
-    char filename[50];
+    char type[12];
+    char size[60];
+    char source[50];
+    char data[1000];
     int start_of_data = 0;
     int start = 0;
     
@@ -37,15 +87,13 @@ struct packet parsepacket(char * filebuffer){
 
         // Change the starting offset each time a colon is reached
         // Append a null character as well to create a C string 
-        if(filebuffer[i] == ':') {
+        if(msg[i] == ':') {
             if(num_colons == 0) {
-            total_frag[i] = '\0';
+                type[i] = '\0';
             }else if(num_colons == 1) {
-                frag_no[i-start] = '\0';
-            }else if(num_colons == 2) {
                 size[i-start] = '\0';
-            }else if(num_colons == 3) {
-                filename[i-start] = '\0';
+            }else if(num_colons == 2) {
+                source[i-start] = '\0';
             }
             start = i+1;
             num_colons++;
@@ -55,35 +103,31 @@ struct packet parsepacket(char * filebuffer){
 
         // Depending on how many colons have been passed, copy the byte data into the respective buffer
         if(num_colons == 0) {
-            total_frag[i] = filebuffer[i];
+            type[i] = msg[i];
 
         }else if(num_colons == 1) {
-            frag_no[i-start] = filebuffer[i];
+            size[i-start] = msg[i];
 
         }else if(num_colons == 2) {
-            size[i-start] = filebuffer[i];
+            source[i-start] = msg[i];
             
         }else if(num_colons == 3) {
-            filename[i-start] = filebuffer[i];
-
-        }else if(num_colons == 4) {
-            // Break out of the for loop and store where the file data starts in the buffer
+            // Break out of the for loop and store where the msg data starts in the buffer
             start_of_data = i;
             break;
             
         }
     }
    
-    pkt.total_frag = atoi(total_frag); 
-    pkt.frag_no = atoi(frag_no); 
-    pkt.size = atoi(size);
-    pkt.filename = (char *)malloc(strlen(filename) + 1);
-    strcpy(pkt.filename, filename);
+    pkt.type = atoi(type); 
+    pkt.size = atoi(size); 
+    pkt.source = (char *)malloc(strlen(source) + 1);
+    strcpy(pkt.source, source);
 
-    // Copy the file data 
+    // Copy the msg data 
     int i = 0;
     while(i < pkt.size){
-        pkt.filedata[i] = filebuffer[i + start_of_data];
+        pkt.data[i] = msg[i + start_of_data];
         i++;
     }
     return pkt; 
@@ -100,22 +144,56 @@ void clearBuf(char* b)
 // Creates and binds a socket, then waits for the first packet to open a file and start writing data to it. 
 // On last packet, write the data and close the file descriptor
 int main(int argc, char *argv[]) {
+
+
     int sockfd;
     char buffer[MAXLINE];
     struct sockaddr_in servaddr, cliaddr;
 
     if (argc != 2) {
-        fprintf(stderr,"usage: server <UDP listen port>\n");
+        fprintf(stderr,"usage: server <TCP listen port>\n");
         exit(1);
     }
     int port = atoi(argv[1]);
+
+    //TODO: Check if port number is available
+    FILE *fp;
+    char path[2];
+
+    char cmd_buffer[30];
+    snprintf(cmd_buffer, sizeof(cmd_buffer), "/bin/nc -z 127.0.0.1 %d; echo $?", port);
+
+    /* Open the command for reading. */
+    fp = popen(cmd_buffer, "r");
+    if (fp == NULL) {
+        printf("Failed to run command\n" );
+        exit(1);
+    }
+
+    /* Read the output a line at a time - output it. */
+    fgets(path, sizeof(path), fp) != NULL);
+    printf("%s", path);
+    path[1] = '\n';
+    int port_open = atoi(path);
+
+    /* close */
+    pclose(fp);
+
+    if (port_open) {
+        printf("Port not available. Please run \"netstat -lnt\" and check those ports.\n" );
+        exit(1);
+    }
        
     // Creating socket file descriptor
-    if ( (sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0 ) {
+    if ( (sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0 ) {
         perror("socket creation failed");
         exit(EXIT_FAILURE);
     }
-       
+
+    // Set to non-blocking
+    fcntl(sockfd, F_SETFL, O_NONBLOCK);
+    
+
     memset(&servaddr, 0, sizeof(servaddr));
     memset(&cliaddr, 0, sizeof(cliaddr));
 
@@ -151,7 +229,8 @@ int main(int argc, char *argv[]) {
     FILE *fp; 
     char* spacketnum = malloc(10); 
     char ACKbuffer[120];  
-   
+
+    listen(sockfd, 100);
     // Receive first packet
     num_bytes = recvfrom(sockfd, (char *)buffer, MAXLINE, 
             MSG_WAITALL, ( struct sockaddr *) &cliaddr,
@@ -172,9 +251,12 @@ int main(int argc, char *argv[]) {
         clearBuf(buffer);
         exit(1);
 
-        }else{    
+    }else{    
             // Process the first packet
-            pkt = parsepacket(buffer); 
+            pkt = parsemsg(buffer); 
+
+            //TODO: switch case or some shit based on the pkt.type
+            // send back the appropriate message
                
             // Create ACK 
             char *ACK = "ACK";
@@ -235,7 +317,7 @@ int main(int argc, char *argv[]) {
             fprintf(stderr, "\nPacket dropped!");
         }else{            
             // Process the packet
-            pkt = parsepacket(buffer); 
+            pkt = parsemsg(buffer); 
            
            
             // Create ACK  
