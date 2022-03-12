@@ -70,7 +70,7 @@ Message* deserialize(char *string)
 
 char *serialize(Message message)
 {
-	char *string = malloc((1200) *sizeof(char));
+	char *string = malloc((MAX_NAME+MAX_DATA+20) *sizeof(char));
 
 	sprintf(string, "%d:%d:%s:%s", message.type, message.size, message.source, message.data);
 
