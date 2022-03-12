@@ -1,7 +1,6 @@
 CC=gcc 
-all: server deliver message
+all: server client 
 server: server.o 
-deliver: deliver.o 
-message: message.o
+client: client.o 
 clean: 	
 	rm -f *.o server deliver 
