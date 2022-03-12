@@ -13,6 +13,7 @@
 #include <sys/fcntl.h> 
    
 #define MAXLINE 1250
+#define NUMTOTALCLIENTS 5
 
 // Linked list implementation
 
@@ -48,14 +49,14 @@ struct message {
     unsigned char data[1000];  
 }; 
 
-struct Session_Info{
+struct session_info{
     struct client logged_in_list[5];
     char conf_session_id[5][50];
     struct client conf_sessions[5][5];
 }
 
 
-enum TYPES{
+typedef enum TYPES{
     LOGIN,
     LO_ACK,
     LO_NAK,
@@ -71,8 +72,9 @@ enum TYPES{
     QU_ACK
 };
 
+
 //parse the packet string
-struct packet parsemsg(char * msg){
+struct message parsemsg(char * msg){
     struct message pkt;
     int num_colons =0;
     char type[12];
@@ -156,7 +158,6 @@ int main(int argc, char *argv[]) {
     }
     int port = atoi(argv[1]);
 
-    //TODO: Check if port number is available
     FILE *fp;
     char path[2];
 
@@ -225,133 +226,120 @@ int main(int argc, char *argv[]) {
     int len, num_bytes;
     len = sizeof(cliaddr);  //len is value/result
     
-    struct packet pkt;
+    struct message msg;
     FILE *fp; 
     char* spacketnum = malloc(10); 
     char ACKbuffer[120];  
 
+    // Constantly listen on this socket
     listen(sockfd, 100);
-    // Receive first packet
-    num_bytes = recvfrom(sockfd, (char *)buffer, MAXLINE, 
-            MSG_WAITALL, ( struct sockaddr *) &cliaddr,
+
+    while(1){
+
+        // Get the new connection and new fd!
+        new_fd = accept(sockfd, ( struct sockaddr *) &cliaddr,
             &len);
-
-    // Check if something was received
-    if(num_bytes == -1){
-        printf("Recvfrom failed!");
-
-        // Send no ack
-        char *NACK = "NACK";
-        sendto(sockfd, (const char *)NACK, strlen("NACK"), 
-            MSG_CONFIRM, (const struct sockaddr *) &cliaddr,
-            len);
-           
-        // Notify and clear buffer
-        printf("NACK\n"); 
-        clearBuf(buffer);
-        exit(1);
-
-    }else{    
-            // Process the first packet
-            pkt = parsemsg(buffer); 
-
-            //TODO: switch case or some shit based on the pkt.type
-            // send back the appropriate message
-               
-            // Create ACK 
-            char *ACK = "ACK";
-            if (snprintf(spacketnum, 10, "%d", pkt.frag_no) >= 10) {
-                // truncation occured; Lost data because buffer was too small
-                perror("snprintf");
-            } else {
-
-                // Concatenate the packet number with string "ACK"
-                strcat(strcpy(ACKbuffer, ACK), spacketnum);
-                free(spacketnum);
-            }
-            
-            fprintf(stderr, "\nSending ACK %d", pkt.frag_no);
-
-            // Send ACK
-            sendto(sockfd, (const char *)ACKbuffer, strlen(ACKbuffer),
-                   MSG_CONFIRM, (const struct sockaddr *)&cliaddr,
-                   len);
-
-            // Open filename now that first packet has been received
-            fp = fopen(pkt.filename, "w"); 
-            if (!fp){
-                fprintf(stderr,"Failed to create file");
-                exit(1);
-            }
-            
-            // Write to the file 
-            fwrite(pkt.filedata, 1, pkt.size, fp); 
-            clearBuf(buffer); 
-            fprintf(stderr, "\npacket 1 delivered, %d packets remaining", (pkt.total_frag-1));
-        }
-
-    // Process all remaining packets
-    while(pkt.frag_no < pkt.total_frag){
-
-        // Receive the packet
-        num_bytes = recvfrom(sockfd, (char *)buffer, MAXLINE, 
-                MSG_WAITALL, ( struct sockaddr *) &cliaddr,
-                &len);
-
-        // Check if something was received
-        if(num_bytes == -1){
-            printf("Recvfrom failed!");
-            //send no ack
-            char *NACK = "NACK";
-            sendto(sockfd, (const char *)NACK, strlen("NACK"), 
-            MSG_CONFIRM, (const struct sockaddr *) &cliaddr,
-                len);
-           
-            //notify and clear buffer
-            printf("NACK\n"); 
-            clearBuf(buffer);
+        if (new_fd == -1){
+            printf("accept failed");
             exit(1);
-
-        }else if(rand()%100 == 67){
-            //Drop the packet and do nothing
-            fprintf(stderr, "\nPacket dropped!");
-        }else{            
-            // Process the packet
-            pkt = parsemsg(buffer); 
-           
-           
-            // Create ACK  
-            char *ACK = "ACK";
-            char *spacketnum = malloc(10);
-
-            if (snprintf(spacketnum, 10, "%d", pkt.frag_no) >= 10){
-                // truncation occured
-                perror("snprintf");
-            }else{
-                strcat(strcpy(ACKbuffer, ACK), spacketnum);
-                free(spacketnum);
-            }
-
-            // Send ACK
-            sendto(sockfd, (const char *)ACKbuffer, strlen(ACKbuffer), 
-                MSG_CONFIRM, (const struct sockaddr *) &cliaddr,
-                len);  
-
-            fprintf(stderr, "\nSending ACK %d", pkt.frag_no);
-            clearBuf(ACKbuffer);
-           
-            // Write to file
-            fwrite(pkt.filedata, 1, pkt.size, fp); 
-            clearBuf(buffer); 
-            
-            fprintf(stderr,"\npacket %d delivered, %d packets remaining", pkt.frag_no, pkt.total_frag-pkt.frag_no);
         }
-      
+
+        // Process the packet
+        msg = parsemsg(buffer); 
+
+        switch(msg.type) {
+
+            case LOGIN: 
+                on_login(msg, new_fd);
+                break;
+
+        }
     }
-    fclose(fp);
-    fprintf(stderr,"\nClosing file\n");
+
     
-    //close the socket
+    // Close the socket
     close(sockfd);
     return 0;
+}
+
+void on_login(struct message msg, int fd){
+    // Check if ID exists
+                int ID_exist = 0;
+                for (int i =0; i < NUMTOTALCLIENTS; i++){
+                    if (strcmp(ID_arr[i], msg.source) == 0){
+                        ID_exist = i+1;
+
+                        break;
+                    }
+                }
+                if(ID_exist == 0){
+
+                    // Send NACK
+                    char pre_pkt_string[200];
+                    sprintf(pre_pkt_string, "%d:%d:%s:%s:", 
+                        LO_NAK, 
+                        25,
+                        msg.source, 
+                        "Client is not registered"
+                    );
+                    send(fd, pre_pkt_string, sizeof(pre_pkt_string), 0);
+                    close(fd);
+                    continue;
+                }
+
+                // Check if matches pw
+                if (strcmp(pw_arr[ID_exist-1], msg.data) != 0){
+                    // Send NACK    
+                    char pre_pkt_string[200];
+                    sprintf(pre_pkt_string, "%d:%d:%s:%s:", 
+                        LO_NAK, 
+                        25,
+                        msg.source, 
+                        "Client is not registered"
+                    );
+                    send(fd, pre_pkt_string, sizeof(pre_pkt_string), 0);
+                    close(fd);
+                    continue;
+                }
+
+                // Check if already logged in
+                int logged_in = 0;
+                int arrLen = sizeof(session_info.logged_in_list)) / sizeof(session_info.logged_in_list[0]);
+                for (int i =0; i < arrLen; i++){
+                    if (strcmp(session_info.logged_in_list[i].ID, msg.source) == 0){
+                        logged_in = i+1;
+                        break;
+                    }
+                }
+
+                if(logged_in == 0){
+                    // Send NACK
+                    char pre_pkt_string[200];
+                    sprintf(pre_pkt_string, "%d:%d:%s:%s:", 
+                        LO_NAK, 
+                        28,
+                        msg.source, 
+                        "Client is already logged in"
+                    );
+                    send(fd, pre_pkt_string, sizeof(pre_pkt_string), 0);
+                    close(fd);
+                    continue;
+                }
+
+                // create the client struct
+                struct client c;
+                c.ID = msg.source;
+                c.pw = msg.data;
+                c.session_ID = NULL;
+
+                //TODO: Add to connected clients
+                // Send back Lo_ACK
+                char pre_pkt_string[200];
+                sprintf(pre_pkt_string, "%d:%d:%s:%s:", 
+                    LO_ACK, 
+                    0, 
+                    msg.source, 
+                    ""
+                );
+                send(fd, NULL, 0, 0);
 }
