@@ -48,7 +48,6 @@ void login(char *client_id, char *password, char *server_ip, char *server_port)
 	login_mes.size = strlen(login_mes.data);
 
 	char *mes_string = serialize(login_mes);
-	printf("%s", mes_string);
 
 	int mes_len = strlen(mes_string);
 
@@ -59,8 +58,9 @@ void login(char *client_id, char *password, char *server_ip, char *server_port)
 	// Check if something was received
 	if (num_bytes == -1)
 	{
-		printf("login failed!");
-		//exit(1);
+		printf("login failed, exiting");
+		logged_in = false; 
+		exit(1);
 	}
 	else
 	{
