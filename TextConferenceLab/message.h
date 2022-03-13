@@ -37,7 +37,8 @@ typedef struct message
 }
 Message;
 
-//from https://stackoverflow.com/questions/9210528/split-string-with-delimiters-in-c
+//reference 1 https://stackoverflow.com/questions/9210528/split-string-with-delimiters-in-c
+//reference 2 https://stackoverflow.com/questions/3889992/how-does-strtok-split-the-string-into-tokens-in-c
 Message* deserialize(char *string)
 {
 	Message *new_message = malloc(sizeof(struct message));
@@ -68,6 +69,8 @@ Message* deserialize(char *string)
 	return new_message;
 }
 
+
+// reference 3 https://stackoverflow.com/questions/48422573/writing-to-file-if-sprintf-buffer-is-overflow
 char *serialize(Message message)
 {
 	char *string = malloc((MAX_NAME+MAX_DATA+20) *sizeof(char));
