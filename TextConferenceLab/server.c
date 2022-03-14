@@ -16,57 +16,17 @@
 #define NUMTOTALCLIENTS 5
 
 #include "link_list_impl.h"
-
-char ID_arr[5][50] = {
-    "pete",
-    "julia",
-    "luigi",
-    "mr.cow",
-    "piss"
-};
-char pw_arr[5][20] = {
-    "1234ttyu",
-    "3456gv",
-    "password3",
-    "mr.password",
-    "peeword"
-};
-
-struct message {  
-    unsigned int type;  
-    unsigned int size; 
-    unsigned char source[50]; 
-    unsigned char data[1000];  
-}; 
-
-
-
-typedef enum TYPES{
-    LOGIN,
-    LO_ACK,
-    LO_NAK,
-    EXIT,
-    JOIN,
-    JN_ACK,
-    JN_NAK,
-    LEAVE_SESS,
-    NEW_SESS,
-    NS_ACK,
-    NS_NAK,
-    MESSAGE,
-    QUERY,
-    QU_ACK
-};
+#include "message.h"
 
 
 //parse the packet string
-struct message parsemsg(char * msg){
-    struct message pkt;
+Message parsemsg(char * msg){
+    Message pkt;
     int num_colons =0;
     char type[12];
     char size[60];
-    char source[50];
-    char data[1000];
+    char source[MAX_NAME];
+    char data[MAX_DATA];
     int start_of_data = 0;
     int start = 0;
     
@@ -133,10 +93,11 @@ void clearBuf(char* b)
 // On last packet, write the data and close the file descriptor
 int main(int argc, char *argv[]) {
 
-
     int sockfd;
     char buffer[MAXLINE];
     struct sockaddr_in servaddr, cliaddr;
+    char cmd_buffer[30];
+    char path[2];
 
     if (argc != 2) {
         fprintf(stderr,"usage: server <TCP listen port>\n");
@@ -144,12 +105,7 @@ int main(int argc, char *argv[]) {
     }
     int port = atoi(argv[1]);
 
-    FILE *fp;
-    char path[2];
-
-    char cmd_buffer[30];
     snprintf(cmd_buffer, sizeof(cmd_buffer), "/bin/nc -z 127.0.0.1 %d; echo $?", port);
-
     /* Open the command for reading. */
     fp = popen(cmd_buffer, "r");
     if (fp == NULL) {
@@ -179,7 +135,6 @@ int main(int argc, char *argv[]) {
 
     // Set to non-blocking
     fcntl(sockfd, F_SETFL, O_NONBLOCK);
-    
 
     memset(&servaddr, 0, sizeof(servaddr));
     memset(&cliaddr, 0, sizeof(cliaddr));
@@ -209,17 +164,12 @@ int main(int argc, char *argv[]) {
         exit(EXIT_FAILURE);
     }
        
-    int len, num_bytes;
-    len = sizeof(cliaddr);  //len is value/result
-    
-    struct message msg;
-    FILE *fp; 
-    char* spacketnum = malloc(10); 
-    char ACKbuffer[120];  
+    int len = sizeof(cliaddr);
 
     // Constantly listen on this socket
     listen(sockfd, 100);
-
+    Message msg;
+    
     while(1){
 
         // Get the new connection and new fd!
@@ -229,6 +179,8 @@ int main(int argc, char *argv[]) {
             printf("accept failed");
             exit(1);
         }
+
+        recv(new_fd, (char *)buffer, MAXLINE,0);
 
         // Process the packet
         msg = parsemsg(buffer); 
@@ -257,11 +209,16 @@ int main(int argc, char *argv[]) {
             case MESSAGE:
                 on_message(msg, fd);
                 break;
+            
+            case QUERY:
+                on_query(msg.source, fd);
+                break;
 
-
+            default:
+                printf("Shouldnt be here");
+                exit(1);
         }
     }
-
     
     // Close the socket
     close(sockfd);
@@ -271,7 +228,7 @@ int main(int argc, char *argv[]) {
 struct client_node *head_cli = NULL;
 struct session_node *head_sess = NULL;
 
-void on_login(struct message msg, int fd, struct sockaddr* cli_addr){
+void on_login(Message msg, int fd, struct sockaddr* cli_addr){
     // Check if ID exists
                 int ID_exist = 0;
                 for (int i =0; i < NUMTOTALCLIENTS; i++){
@@ -349,7 +306,7 @@ void on_login(struct message msg, int fd, struct sockaddr* cli_addr){
                 send(fd, pre_pkt_string, sizeof(pre_pkt_string), 0);
 }
 
-void on_join(struct message msg, int fd){
+void on_join(Message msg, int fd){
     
     // Check if session exists
     struct session_node* client_session = find_sess(msg.data, head_sess);
@@ -400,7 +357,7 @@ void on_join(struct message msg, int fd){
     send(fd, pre_pkt_string, sizeof(pre_pkt_string), 0);
 }
 
-void on_new_sess(struct message msg, int fd){
+void on_new_sess(Message msg, int fd){
 
     // Check if already joined a session 
     struct client_node* client = find_cli(msg.source, head_cli);
@@ -455,7 +412,7 @@ void on_new_sess(struct message msg, int fd){
     send(fd, pre_pkt_string, sizeof(pre_pkt_string), 0);
 }
 
-void on_message(struct message msg, int fd){
+void on_message(Message msg, int fd){
 
     // Get the client's session id
     struct client_node* client = find_cli(ID, head_cli);

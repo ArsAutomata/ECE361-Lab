@@ -1,3 +1,6 @@
+#ifndef MESSAGE_H
+#define MESSAGE_H
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -11,7 +14,25 @@
 #define MAX_NAME 100
 #define MAX_DATA 1000
 
-enum TYPES
+
+char ID_arr[5][MAX_NAME] = {
+    "pete",
+    "julia",
+    "luigi",
+    "mr.cow",
+    "piss",
+	"123"
+};
+char pw_arr[5][20] = {
+    "1234ttyu",
+    "3456gv",
+    "password3",
+    "mr.password",
+    "peeword",
+	"123"
+};
+
+typedef enum TYPES
 {
 	LOGIN,
 	LO_ACK,
@@ -23,25 +44,25 @@ enum TYPES
 	LEAVE_SESS,
 	NEW_SESS,
 	NS_ACK,
+	NS_NAK,
 	MESSAGE,
 	QUERY,
 	QU_ACK
 };
 
-typedef struct message
+typedef struct Message
 {
 	unsigned int type;
 	unsigned int size;
 	unsigned char source[MAX_NAME];
 	unsigned char data[MAX_DATA];
-}
-Message;
+};
 
 //reference 1 https://stackoverflow.com/questions/9210528/split-string-with-delimiters-in-c
 //reference 2 https://stackoverflow.com/questions/3889992/how-does-strtok-split-the-string-into-tokens-in-c
 Message* deserialize(char *string)
 {
-	Message *new_message = malloc(sizeof(struct message));
+	Message *new_message = malloc(sizeof(struct Message));
 
 	char *typevar;
 	char *size;
@@ -71,19 +92,21 @@ Message* deserialize(char *string)
 
 
 // reference 3 https://stackoverflow.com/questions/48422573/writing-to-file-if-sprintf-buffer-is-overflow
-char *serialize(Message message)
+char *serialize(Message msg)
 {
 	char *string = malloc((MAX_NAME+MAX_DATA+20) *sizeof(char));
 
-	sprintf(string, "%d:%d:%s:%s", message.type, message.size, message.source, message.data);
+	sprintf(string, "%d:%d:%s:%s", msg.type, msg.size, msg.source, msg.data);
 
 	return string;
 }
 
-void print_message(Message message)
+void print_message(Message msg)
 {
-	printf("Type: %d\n", message.type);
-	printf("Size: %d\n", message.size);
-	printf("Source: %s\n", message.source);
-	printf("Data: %s\n", message.data);
+	printf("Type: %d\n", msg.type);
+	printf("Size: %d\n", msg.size);
+	printf("Source: %s\n", msg.source);
+	printf("Data: %s\n", msg.data);
 }
+
+#endif
