@@ -20,6 +20,9 @@ int num_bytes;
 socklen_t servaddr_len;
 struct sockaddr_in servaddr;
 
+//buffer
+char[MAX_NAME + MAX_DATA + 20];
+
 void login(char *client_id, char *password, char *server_ip, char *server_port)
 {
 	//create socket and conenct to server
@@ -42,7 +45,7 @@ void login(char *client_id, char *password, char *server_ip, char *server_port)
 
 	//prepare the message
 	Message login_mes;
-	login_mes.type = 1;
+	login_mes.type = JOIN;
 	strcpy(login_mes.source, client_id);
 	strcpy(login_mes.data, password);
 	login_mes.size = strlen(login_mes.data);
@@ -59,7 +62,7 @@ void login(char *client_id, char *password, char *server_ip, char *server_port)
 	if (num_bytes == -1)
 	{
 		printf("login failed, exiting");
-		logged_in = false; 
+		logged_in = false;
 		exit(1);
 	}
 	else
@@ -73,7 +76,7 @@ void login(char *client_id, char *password, char *server_ip, char *server_port)
 void logout()
 {
 	Message logout_mes;
-	logout_mes.type = 4;
+	logout_mes.type = EXIT;
 	strcpy(logout_mes.source, " ");
 	logout_mes.size = strlen(logout_mes.data);
 
@@ -84,6 +87,7 @@ void logout()
 
 	int num_bytes;
 	num_bytes = sendto(sockfd, (const char *) mes_string, mes_len, MSG_CONFIRM, (const struct sockaddr *) &servaddr, sizeof(servaddr));
+	strcpy(mes_string, buffer);
 
 	// Check if something was received
 	if (num_bytes == -1)
@@ -95,6 +99,111 @@ void logout()
 	{
 		close(sockfd);
 		logged_in = false;
+	}
+}
+
+void createsession(char *session_id)
+{
+
+	Message create_mes;
+	create_mes.type = NEW_SESS;
+	strncpy(create_mes.data, session_id, 200);
+	create_mes.size = strlen(create_mes.data);
+
+	char *create_string = serialize(create_mes);
+	int num_bytes;
+	strcpy(create_string, buffer);
+
+	if ((num_bytes = send(*sockfd, buffer, BUF_SIZE - 1, 0)) == -1)
+	{
+		return;
+	}
+	else
+	{
+		printf("Could not send.\n");
+		return;
+	}
+}
+
+void joinsession(char *session_id)
+{
+	if (in_session)
+	{
+		fprintf("You are in a session.\n");
+		return;
+	}
+
+	Message join_mes;
+	join_mes.type = JOIN;
+	strncpy(join_mes.data, session_id, 200);
+	join_mes.size = strlen(join_mes.data);
+
+	char *join_string = serialize(join_mes);
+	int num_bytes;
+	strcpy(join_string, buffer);
+
+	if ((num_bytes = send(*sockfd, buffer, BUF_SIZE - 1, 0)) == -1)
+	{
+		return;
+	}
+	else
+	{
+		printf("Could not send.\n");
+		return;
+	}
+}
+
+void leavesession()
+{
+	if (!in_session)
+	{
+		fprintf("You are not in a session.\n");
+		return;
+	}
+
+	Message leave_mes;
+	leave_mes.type = LEAVE_SESS;
+	leave_mes.size = 0;
+
+	char *leave_string = serialize(join_mes);
+	int num_bytes;
+	strcpy(leave_string, buffer);
+
+	if ((num_bytes = send(*sockfd, buffer, BUF_SIZE - 1, 0)) == -1)
+	{
+		return;
+	}
+	else
+	{
+		printf("Could not send.\n");
+		return;
+	}
+}
+
+void list()
+{
+	if (!in_session)
+	{
+		fprintf("You are not in a session.\n");
+		return;
+	}
+
+	Message list_mes;
+	list_mes.type = QUERY;
+	list_mes.size = 0;
+
+	char *list_string = serialize(list_mes);
+	int num_bytes;
+	strcpy(list_string, buffer);
+
+	if ((num_bytes = send(*sockfd, buffer, BUF_SIZE - 1, 0)) == -1)
+	{
+		return;
+	}
+	else
+	{
+		printf("Could not send.\n");
+		return;
 	}
 }
 
@@ -153,18 +262,22 @@ int main()
 		else if (strcmp(cmd, "/joinsession") == 0)
 		{
 			scanf(" %s", session_id);
+			joinsession(session_id);
 		}
 		else if (strcmp(cmd, "/leavesession") == 0)
 		{
-			printf("leavesession");
+			leavesession();
+			printf("left session");
 		}
 		else if (strcmp(cmd, "/createsession") == 0)
 		{
 			scanf(" %s", session_id);
+			createsession(session_id);
 		}
 		else if (strcmp(cmd, "/list") == 0)
 		{
 			printf("list");
+			list();
 		}
 		else if (strcmp(cmd, "/quit") == 0)
 		{
