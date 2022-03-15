@@ -71,7 +71,7 @@ void login(char *client_id, char *password, char *server_ip, char *server_port)
 	if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
 	{
 		perror("socket creation failed");
-		exit(EXIT_FAILURE);
+		exit(1);
 	}
 
 	// Set to non-blocking
@@ -118,8 +118,8 @@ void login(char *client_id, char *password, char *server_ip, char *server_port)
 		return;
 	}
 
-	clear_buffer();
 	Message *response = deserialize(buffer);
+	clear_buffer();
 
 	if (response->type == LO_ACK)
 	{
@@ -180,8 +180,8 @@ void joinsession(char *session_id)
 		return;
 	}
 
-	clear_buffer();
 	Message *response = deserialize(buffer);
+	clear_buffer();
 
 	if (response->type == JN_ACK)
 	{
@@ -223,6 +223,7 @@ void createsession(char *session_id)
 	}
 
 	Message *response = deserialize(buffer);
+	clear_buffer();
 	if (response->type == NS_ACK)
 	{
 		printf("session %s created\n", session_id);
@@ -276,6 +277,19 @@ void leavesession()
 	return;
 }
 
+void printlist(char *string){
+	char s[MAX_DATA];
+	strcpy(s, string);
+    char* p = strtok(s, ":");
+    printf("no session\n");
+    while(p != NULL){
+            printf("%s\n", p);
+        
+        p = strtok(NULL,":");
+    }
+    return ;
+}
+
 void list()
 {
 	if (!in_session)
@@ -305,12 +319,13 @@ void list()
 		return;
 	}
 
-	clear_buffer();
 	Message *response = deserialize(buffer);
+	clear_buffer();
 
 	if (response->type == QU_ACK)
 	{
 		printf("list recieved\n");
+		printlist(response->data);
 		return;
 	}
 	else
