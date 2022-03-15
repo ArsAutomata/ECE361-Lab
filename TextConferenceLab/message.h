@@ -14,14 +14,14 @@
 #define MAX_NAME 100
 #define MAX_DATA 1000
 
-char ID_arr[5][MAX_NAME] = {
+char ID_arr[6][MAX_NAME] = {
 	"pete",
 	"julia",
 	"luigi",
 	"mr.cow",
 	"piss",
 	"123"};
-char pw_arr[5][20] = {
+char pw_arr[6][20] = {
 	"1234ttyu",
 	"3456gv",
 	"password3",

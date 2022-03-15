@@ -25,7 +25,6 @@ char buffer[BUFFFER_SIZE];
 
 bool send_buffer()
 {
-	int num_bytes;
 
 	if ((num_bytes = send(sockfd, buffer, BUFFFER_SIZE - 1, 0)) == -1)
 	{
@@ -40,68 +39,89 @@ bool send_buffer()
 
 void login(char *client_id, char *password, char *server_ip, char *server_port)
 {
-	// create socket and conenct to server
-	char *server_address = server_ip;
+	// check for possible errors
+	if (client_id == NULL || password == NULL || server_ip == NULL || server_port == NULL)
+	{
+		printf("incorrect usage of login");
+		return;
+	}
+
+	struct sockaddr_in servaddr, cliaddr;
+
 	int port = atoi(server_port);
 
-	// socket file descriptor for IPv4
-	if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
+	// Creating socket file descriptor
+	if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
 	{
 		perror("socket creation failed");
-		exit(1);
+		exit(EXIT_FAILURE);
 	}
 
 	memset(&servaddr, 0, sizeof(servaddr));
+	memset(&cliaddr, 0, sizeof(cliaddr));
 
 	// Filling server information
-	servaddr.sin_family = AF_INET;
+	servaddr.sin_family = AF_INET; // IPv4
+	servaddr.sin_addr.s_addr = inet_addr(server_ip);
 	servaddr.sin_port = htons(port);
-	servaddr.sin_addr.s_addr = inet_addr(server_address);
 
-	// prepare the message
+	// Bind the socket with the server address
+	if (bind(sockfd, (const struct sockaddr *)&servaddr,
+			 sizeof(servaddr)) < 0)
+	{
+		printf("bind failed");
+		return;
+	}
+
 	Message login_mes;
-	login_mes.type = JOIN;
+	login_mes.type = LOGIN;
 	strcpy(login_mes.source, client_id);
 	strcpy(login_mes.data, password);
-	login_mes.size = strlen(login_mes.data);
+	login_mes.size = strlen(password);
 
-	char *mes_string = serialize(login_mes);
-
-	int mes_len = strlen(mes_string);
-
-	logged_in = true;
-	// send the message
-	//num_bytes = sendto(sockfd, (const char *)mes_string, mes_len, mes_string, (const struct sockaddr *)&servaddr, sizeof(servaddr));
-
-	// Check if something was received
-	if (num_bytes == -1)
-	{
-		printf("login failed, exiting");
-		logged_in = false;
-		exit(1);
-	}
-	else
-	{
-		logged_in = true;
+	strcpy(buffer, serialize(login_mes));
+	if(send_buffer()==true){
+		printf("client sent");
+	}else{
+		printf("could not send login info\n");
+		return; 
 	}
 
-	return;
+	if ((num_bytes = recv(sockfd, buffer, BUFFFER_SIZE - 1, 0)) == -1)
+	{
+		printf("failed recieve");
+		close(sockfd);
+		return;
+	}
+	
+
+	Message *response = deserialize(buffer);
+	if (response->type == LO_ACK)
+	{
+		printf("logged in\n");
+		logged_in = true; 
+		return;
+	}
+	else if (response->type == LO_NAK)
+	{
+		printf("wrong login information\n");
+		close(sockfd);
+		return;
+	}else{
+		printf("very big wrong ahhh!");
+
+	}
 }
 
 void logout()
 {
 	Message logout_mes;
 	logout_mes.type = EXIT;
-	strcpy(logout_mes.source, " ");
-	logout_mes.size = strlen(logout_mes.data);
+	logout_mes.size = MAX_NAME;
 
 	char *mes_string = serialize(logout_mes);
 	printf("%s", mes_string);
 
-	int mes_len = strlen(mes_string);
-
-	int num_bytes;
-	//num_bytes = sendto(sockfd, (const char *)mes_string, mes_len, MSG_CONFIRM, (const struct sockaddr *)&servaddr, sizeof(servaddr));
 	strcpy(mes_string, buffer);
 
 	// Check if something was received
@@ -124,8 +144,8 @@ void createsession(char *session_id)
 
 	Message create_mes;
 	create_mes.type = NEW_SESS;
-	strncpy(create_mes.data, session_id, 200);
-	create_mes.size = strlen(create_mes.data);
+	strcpy(create_mes.data, session_id);
+	create_mes.size = strlen(session_id);
 
 	char *create_string = serialize(create_mes);
 	strcpy(create_string, buffer);
@@ -146,8 +166,8 @@ void joinsession(char *session_id)
 
 	Message join_mes;
 	join_mes.type = JOIN;
-	strncpy(join_mes.data, session_id, 200);
-	join_mes.size = strlen(join_mes.data);
+	strcpy(join_mes.data, session_id);
+	join_mes.size = strlen(session_id);
 
 	char *join_string = serialize(join_mes);
 	int num_bytes;
@@ -210,14 +230,14 @@ void list()
 	return;
 }
 
-void send_text(char* text)
+void send_text(char *text)
 {
 	int numbytes;
 	Message text_mes;
 	text_mes.type = MESSAGE;
 
 	strcpy(text_mes.data, text);
-	text_mes.size = strlen(text_mes.data);
+	text_mes.size = strlen(text);
 	char *text_string = serialize(text_mes);
 
 	strcpy(text_string, buffer);
@@ -350,7 +370,7 @@ int main()
 
 				strcat(total_text, cmd);
 				strcat(total_text, partial_text);
-				
+
 				send_text(total_text);
 			}
 		}
