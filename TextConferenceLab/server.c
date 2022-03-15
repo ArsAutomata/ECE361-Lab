@@ -154,7 +154,7 @@ int main(int argc, char *argv[]) {
     /* close */
     pclose(fp);
 
-    printf("Using port number %d", port);
+    fprintf(stderr, "Using port number %d\n", port);
        
     // Creating socket file descriptor
     if ( (sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0 ) {
