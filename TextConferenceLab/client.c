@@ -8,6 +8,9 @@
 #include <netinet/in.h>
 #include <sys/time.h>
 #include <stdbool.h>
+#include <sys/fcntl.h> 
+#include <errno.h>
+#include <poll.h>
 #include "message.h"
 #define COMMAND_LEN 100
 #define BUFFFER_SIZE 1200
@@ -23,6 +26,18 @@ struct sockaddr_in servaddr;
 // buffer
 char buffer[BUFFFER_SIZE];
 
+// client source
+char client_id[COMMAND_LEN];
+
+void clear_buffer()
+{
+	// clear the buffer for next message
+	for (int i = 0; i < strlen(buffer); i++)
+	{
+		buffer[i] = '\0';
+	}
+}
+
 bool send_buffer()
 {
 
@@ -35,7 +50,8 @@ bool send_buffer()
 		printf("Could not send.\n");
 		return false;
 	}
-	//TODO: clear the buffer after sending to make sure it is empty for next message
+
+	clear_buffer();
 }
 
 void login(char *client_id, char *password, char *server_ip, char *server_port)
@@ -58,6 +74,9 @@ void login(char *client_id, char *password, char *server_ip, char *server_port)
 		exit(EXIT_FAILURE);
 	}
 
+	// Set to non-blocking
+	fcntl(sockfd, F_SETFL, O_NONBLOCK);
+
 	memset(&servaddr, 0, sizeof(servaddr));
 	memset(&cliaddr, 0, sizeof(cliaddr));
 
@@ -66,14 +85,11 @@ void login(char *client_id, char *password, char *server_ip, char *server_port)
 	servaddr.sin_addr.s_addr = inet_addr(server_ip);
 	servaddr.sin_port = htons(port);
 
-	// TODO: bind should not be called on the client side, connect() should be called instead
-	// Like this: connect(sockfd, (const struct sockaddr *)&servaddr, sizeof(servaddr));
-
-	// Bind the socket with the server address
-	if (bind(sockfd, (const struct sockaddr *)&servaddr,
-			 sizeof(servaddr)) < 0)
+	// connect on client side
+	if (connect(sockfd, (const struct sockaddr *)&servaddr, sizeof(servaddr)) == -1)
 	{
-		printf("bind failed");
+		logged_in = false;
+		perror("could not connect to server");
 		return;
 	}
 
@@ -84,37 +100,42 @@ void login(char *client_id, char *password, char *server_ip, char *server_port)
 	login_mes.size = strlen(password);
 
 	strcpy(buffer, serialize(login_mes));
-	if(send_buffer()==true){
+	if (send_buffer() == true)
+	{
 		printf("client sent");
-	}else{
+	}
+	else
+	{
 		printf("could not send login info\n");
-		return; 
+		return;
 	}
 
+	int num_bytes;
 	if ((num_bytes = recv(sockfd, buffer, BUFFFER_SIZE - 1, 0)) == -1)
 	{
 		printf("failed recieve");
 		close(sockfd);
 		return;
 	}
-	
 
+	clear_buffer();
 	Message *response = deserialize(buffer);
+
 	if (response->type == LO_ACK)
 	{
 		printf("logged in\n");
-		logged_in = true; 
+		logged_in = true;
 		return;
 	}
 	else if (response->type == LO_NAK)
 	{
-		// TODO: print the error message that comes with the LO_NAK: response->data
-		printf("wrong login information\n");
+		printf("%s", response->data);
 		close(sockfd);
 		return;
-	}else{
+	}
+	else
+	{
 		printf("very big wrong ahhh!");
-
 	}
 }
 
@@ -123,25 +144,56 @@ void logout()
 	Message logout_mes;
 	logout_mes.type = EXIT;
 	logout_mes.size = MAX_NAME;
-
-	//TODO: populate the message's source (and maybe the data even if its not being used)
+	strcpy(logout_mes.size, client_id);
+	strcpy(logout_mes.data, "");
 
 	char *mes_string = serialize(logout_mes);
 	printf("%s", mes_string);
 
-	strcpy(buffer,mes_string);
+	strcpy(buffer, mes_string);
 
-	// TODO: nothing is being received so just keep the else block
-	// Check if something was received
-	if (num_bytes == -1)
+	close(sockfd);
+	logged_in = false;
+}
+
+void joinsession(char *session_id)
+{
+	printf("joining: %s\n", session_id);
+
+	Message join_mes;
+	join_mes.type = JOIN;
+	strcpy(join_mes.data, session_id);
+	join_mes.size = strlen(session_id);
+	strcpy(join_mes.source, client_id);
+
+	char *join_string = serialize(join_mes);
+	int num_bytes;
+	strcpy(join_string, buffer);
+
+	send_buffer();
+
+	// check the type of ACK (JN_ACK or JN_NAK) for join and handle appropriately
+	if ((num_bytes = recv(sockfd, buffer, BUFFFER_SIZE - 1, 0)) == -1)
 	{
-		printf("Recvfrom failed!");
-		exit(1);
-	}
-	else
-	{
+		printf("failed recieve");
 		close(sockfd);
-		logged_in = false;
+		return;
+	}
+
+	clear_buffer();
+	Message *response = deserialize(buffer);
+
+	if (response->type == JN_ACK)
+	{
+		printf("joined session: %s\n", session_id);
+		logged_in = true;
+		return;
+	}
+	else if (response->type == JN_NAK)
+	{
+		printf("%s", response->data);
+		close(sockfd);
+		return;
 	}
 }
 
@@ -154,60 +206,49 @@ void createsession(char *session_id)
 	create_mes.type = NEW_SESS;
 	strcpy(create_mes.data, session_id);
 	create_mes.size = strlen(session_id);
+	strcpy(create_mes.source, client_id);
 
 	char *create_string = serialize(create_mes);
-	strcpy(buffer,create_string);
+	strcpy(buffer, create_string);
 
 	send_buffer();
 
-	// TODO: print a message if it succeeds and handle NS_NAK, printing the error that came along with it 
-	if ((num_bytes = recv(sockfd, buffer, BUFFFER_SIZE - 1, 0)) == -1)
-	{
-		printf("failed create");
-		return;
-	}
-	// TODO: you will be in your created session after this so set in_session accordingly
-	return;
-}
-
-void joinsession(char *session_id)
-{
-	// TODO: Should remove this as is the servers job to send the JN_NAK with this msg
-	if (in_session)
-	{
-		printf("You are in a session.\n");
-		return;
-	}
-
-	printf("joining: %s\n", session_id);
-
-	Message join_mes;
-	join_mes.type = JOIN;
-	strcpy(join_mes.data, session_id);
-	join_mes.size = strlen(session_id);
-	//TODO: set join_mes.source
-
-	char *join_string = serialize(join_mes);
+	// recieve data, print sucess on NS_ACK, print error data on NS_NAK
 	int num_bytes;
-	strcpy(join_string, buffer);
-
-	send_buffer(); 
-
-	// TODO: check the type of ACK (JN_ACK or JN_NAK) for join and handle appropriately
 	if ((num_bytes = recv(sockfd, buffer, BUFFFER_SIZE - 1, 0)) == -1)
 	{
-		printf("failed create");
+		printf("failed recieve");
+		close(sockfd);
 		return;
-	}else{
+	}
+
+	Message *response = deserialize(buffer);
+	if (response->type == NS_ACK)
+	{
+		printf("session %s created\n", session_id);
 		in_session = true;
 		return;
 	}
+	else if (response->type == NS_NAK)
+	{
+		printf("%s", response->data);
+		in_session = false;
+		return;
+	}
+	else
+	{
+		printf("very big wrong ahhh!");
+	}
+
+	// join the created session
+	joinsession(session_id);
+
 	return;
 }
 
 void leavesession()
 {
-	
+
 	if (!in_session)
 	{
 		printf("You are not in a session.\n");
@@ -219,7 +260,8 @@ void leavesession()
 	Message leave_mes;
 	leave_mes.type = LEAVE_SESS;
 	leave_mes.size = 0;
-	//TODO: set source and data (even if data is just "" cuz might get error when calling leave_mes.data )
+	strcpy(leave_mes.source, client_id);
+	strcpy(leave_mes.data, " ");
 
 	char *leave_string = serialize(leave_mes);
 	int num_bytes;
@@ -247,17 +289,35 @@ void list()
 	Message list_mes;
 	list_mes.type = QUERY;
 	list_mes.size = 0;
-	// TODO: set source and data for message
+	strcpy(list_mes.source, client_id);
 
 	char *list_string = serialize(list_mes);
-	int num_bytes;
 	strcpy(buffer, list_string);
 
 	send_buffer();
 
-	//TODO: call recv to get the QU_ACK
-	// print out the user list and their sessions
-	return;
+	// TODO: call recv to get the QU_ACK
+	//  print out the user list and their sessions
+	if ((num_bytes = recv(sockfd, buffer, BUFFFER_SIZE - 1, 0)) == -1)
+	{
+		printf("failed recieve");
+		close(sockfd);
+		return;
+	}
+
+	clear_buffer();
+	Message *response = deserialize(buffer);
+
+	if (response->type == QU_ACK)
+	{
+		printf("list recieved\n");
+		return;
+	}
+	else
+	{
+		printf("error in recieveing list");
+		return;
+	}
 }
 
 void send_text(char *text)
@@ -265,7 +325,7 @@ void send_text(char *text)
 	int numbytes;
 	Message text_mes;
 	text_mes.type = MESSAGE;
-	//TODO: set source
+	strcpy(text_mes.source, client_id);
 
 	strcpy(text_mes.data, text);
 	text_mes.size = strlen(text);
@@ -281,7 +341,6 @@ int main()
 {
 	// input strings
 	char cmd[COMMAND_LEN];
-	char client_id[COMMAND_LEN];
 	char session_id[COMMAND_LEN];
 	char password[COMMAND_LEN];
 	char server_ip[COMMAND_LEN];
@@ -361,13 +420,29 @@ int main()
 
 		while (in_session)
 		{
-			//TODO:
-			// Should be listening for packets on a non-blocking port as well somewhere here as long as you are in the session
-			// probably should open a thread for getting user input while listening for packets on this thread (checkout beej's on listen(), and accept(), adn then you can call recv() once these two are done)
-			// can use my code for reference on how to listen for stuff
+			// TODO:
+			//  Should be listening for packets on a non-blocking port as well somewhere here as long as you are in the session (it already is in connect)
+			//  probably should open a thread for getting user input while listening for packets on this thread (checkout beej's on listen(), and accept(), adn then you can call recv() once these two are done)
+			//  can use my code for reference on how to listen for stuff
+
+			// Constantly listen on this socket
+			listen(sockfd, 10);
+			int new_sockfd = accept(sockfd, (const struct sockaddr *)&servaddr, sizeof(servaddr));
+
+			recv(new_sockfd, buffer, BUFFFER_SIZE - 1, 0);
+
+			// process the buffer to see if it is text
+			clear_buffer();
+			Message *response = deserialize(buffer);
+			if (response->type == MESSAGE)
+			{
+				printf("%s", response->data);
+			}
+
+			// the code abovve should theoretically work, but it dosn't, idk why
+
 			scanf("%s", cmd);
 
-			//TODO: server will handle this error, no need to handle
 			if (strcmp(cmd, "/login") == 0)
 			{
 				printf("already logged in\n");
@@ -376,7 +451,6 @@ int main()
 			{
 				logout();
 			}
-			//TODO: server will handle this error, no need to handle
 			else if (strcmp(cmd, "/joinsession") == 0)
 			{
 				printf("already in a session\n");
