@@ -11,7 +11,9 @@
 #include <string.h>
 #include <stdlib.h>
 #include <sys/fcntl.h> 
-   
+#include <errno.h>
+#include <poll.h>
+
 #define MAXLINE 1250
 #define NUMTOTALCLIENTS 5
 
@@ -120,7 +122,7 @@ int main(int argc, char *argv[]) {
     }
 
     FILE *fp;
-    char path[500];
+    char path[1000];
     int port;
 
     /* Open the command for reading. */
@@ -132,17 +134,21 @@ int main(int argc, char *argv[]) {
 
     /* Read the output and get the first line that starts with tcp for IPv4 */
     while (fgets(path, sizeof(path), fp) != NULL) {
-            if(!strncmp(path, "tcp ", 4)){
-                char *start;
-                start = strstr(path, "127.0.0.1:");
-                char *end = strstr(start+10," ");
-                int port_numlen = end - start-10;
-
-                char *port_str = malloc(port_numlen);
-                strncpy(port_str, start+10, port_numlen);
-                port = atoi(port_str);
-                break;
+        if(!strncmp(path, "tcp ", 4)){
+            char *localhost = "127.0.0.1:";
+            char *start = strstr(path, "127.0.0.1:");
+            if(start == NULL){
+                continue;
             }
+            
+            char *end = strstr(start," ");
+            
+            int port_numlen = end - start-strlen(localhost);
+            char *port_str = malloc(port_numlen);
+            strncpy(port_str, start+strlen(localhost), port_numlen);
+            port = atoi(port_str);
+            break;
+        }
     }
 
     /* close */
@@ -194,14 +200,22 @@ int main(int argc, char *argv[]) {
     Message msg;
     struct m_data m_msg;
     int new_fd;
+    struct pollfd pfds[1];
+    pfds[0].fd = sockfd;
+    pfds[0].events = POLLIN;
     
     while(1){
 
         // Get the new connection and new fd!
         new_fd = accept(sockfd, ( struct sockaddr *) &cliaddr,
             &len);
-        if (new_fd == -1){
-            printf("accept failed");
+        if (new_fd < 0){
+            perror("accept failed, waiting for a connection");
+            if((errno == ENETDOWN || errno == EPROTO || errno == ENOPROTOOPT || errno == EHOSTDOWN ||
+            errno == ENONET || errno == EHOSTUNREACH || errno == EOPNOTSUPP || errno == ENETUNREACH || errno == EAGAIN)) {
+            poll(pfds,1,-1);
+            continue;
+         }
             exit(1);
         }
 
