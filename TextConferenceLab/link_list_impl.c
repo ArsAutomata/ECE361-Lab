@@ -1,16 +1,18 @@
 // Linked list implementation
-
+#include <stddef.h>
+#include <stdlib.h>
+#include <string.h>
 // Nodes for logged_in list
 struct client_node {
-    char ID[50];
-    char session_ID[50];
+    char* ID;
+    char* session_ID;
     struct sockaddr* cli_addr;
     struct client_node *next;
 };
 
 // Nodes for conference session list
 struct session_node {
-    char ID[50];
+    char* ID;
     struct client_node *head_c;
     struct session_node *next;
 };
@@ -29,10 +31,10 @@ void insert_cli(char* ID, char* session_ID, struct sockaddr* cli_addr, struct cl
    
 	
    //point it to old first node
-   link->next = head_cli;
+   link->next = head_c;
 	
    //point first to new first node
-   head_cli = link;
+   head_c = link;
 }
 
 //insert link at the first location of conf session list
@@ -113,16 +115,16 @@ void delete_sess(char *ID, struct session_node* head_sess) {
    struct session_node* previous = NULL;
 	
    //if list is empty
-   if(head_sess == NULL) {
-      return NULL;
-   }
+   // if(head_sess == NULL) {
+   //    return NULL;
+   // }
 
    //navigate through list
    while(strcmp(current->ID,ID) != 0) {
 
       //if it is last node
       if(current->next == NULL) {
-         return NULL;
+         // return NULL;
       } else {
          //store reference to current link
          previous = current;

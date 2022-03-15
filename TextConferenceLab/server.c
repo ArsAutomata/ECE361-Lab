@@ -18,6 +18,23 @@
 #include "link_list_impl.h"
 #include "message.h"
 
+struct client_node *head_cli = NULL;
+struct session_node *head_sess = NULL;
+
+void on_join(struct m_data msg, int fd);
+void on_new_sess(struct m_data msg, int fd);
+void on_login(struct m_data msg, int fd, struct sockaddr* cli_addr);
+void on_message(struct m_data msg, int fd);
+void on_query(char *ID, int fd);
+void on_leave_sess(char *ID);
+void on_logout(char *ID);
+
+struct m_data{
+    unsigned int type;
+	unsigned int size;
+	char* client_id;
+	char* client_data;
+};
 
 //parse the packet string
 Message parsemsg(char * msg){
@@ -169,6 +186,7 @@ int main(int argc, char *argv[]) {
     // Constantly listen on this socket
     listen(sockfd, 100);
     Message msg;
+    struct m_data m_msg;
     
     while(1){
 
@@ -184,34 +202,38 @@ int main(int argc, char *argv[]) {
 
         // Process the packet
         msg = parsemsg(buffer); 
+        m_msg.type = msg.type;
+        m_msg.size = msg.size;
+        strcpy(m_msg.client_data, msg.data);
+        strcpy(m_msg.client_id, msg.source);
 
         switch(msg.type) {
 
             case LOGIN: 
-                on_login(msg, new_fd, (struct sockaddr *) &cliaddr);
+                on_login(m_msg, new_fd, (struct sockaddr *) &cliaddr);
                 break;
 
             case JOIN:
-                on_join(msg, new_fd);
+                on_join(m_msg, new_fd);
 
             case EXIT:
-                on_exit(msg.source);
+                on_logout(m_msg.client_id);
                 break;
 
             case LEAVE_SESS:
-                on_leave_sess(msg.source);
+                on_leave_sess(m_msg.client_id);
                 break;
             
             case NEW_SESS:
-                on_new_sess(msg, new_fd);
+                on_new_sess(m_msg, new_fd);
                 break;
 
             case MESSAGE:
-                on_message(msg, fd);
+                on_message(m_msg, fd);
                 break;
             
             case QUERY:
-                on_query(msg.source, fd);
+                on_query(m_msg.client_id, fd);
                 break;
 
             default:
@@ -225,14 +247,13 @@ int main(int argc, char *argv[]) {
     return 0;
 }
 
-struct client_node *head_cli = NULL;
-struct session_node *head_sess = NULL;
 
-void on_login(Message msg, int fd, struct sockaddr* cli_addr){
+
+void on_login(struct m_data msg, int fd, struct sockaddr* cli_addr){
     // Check if ID exists
                 int ID_exist = 0;
                 for (int i =0; i < NUMTOTALCLIENTS; i++){
-                    if (strcmp(ID_arr[i], msg.source) == 0){
+                    if (strcmp(ID_arr[i], msg.client_id) == 0){
                         ID_exist = i+1;
 
                         break;
@@ -245,7 +266,7 @@ void on_login(Message msg, int fd, struct sockaddr* cli_addr){
                     sprintf(pre_pkt_string, "%d:%d:%s:%s", 
                         LO_NAK, 
                         25,
-                        msg.source, 
+                        msg.client_id, 
                         "Client is not registered"
                     );
                     send(fd, pre_pkt_string, sizeof(pre_pkt_string), 0);
@@ -254,13 +275,13 @@ void on_login(Message msg, int fd, struct sockaddr* cli_addr){
                 }
 
                 // Check if matches pw
-                if (strcmp(pw_arr[ID_exist-1], msg.data) != 0){
+                if (strcmp(pw_arr[ID_exist-1], msg.client_data) != 0){
                     // Send NACK    
                     char pre_pkt_string[200];
                     sprintf(pre_pkt_string, "%d:%d:%s:%s", 
                         LO_NAK, 
                         25,
-                        msg.source, 
+                        msg.client_id, 
                         "Client is not registered"
                     );
                     send(fd, pre_pkt_string, sizeof(pre_pkt_string), 0);
@@ -272,7 +293,7 @@ void on_login(Message msg, int fd, struct sockaddr* cli_addr){
                 int logged_in = 0;
                 int arrLen = sizeof(session_info.logged_in_list)) / sizeof(session_info.logged_in_list[0]);
                 for (int i =0; i < arrLen; i++){
-                    if (strcmp(session_info.logged_in_list[i].ID, msg.source) == 0){
+                    if (strcmp(session_info.logged_in_list[i].ID, msg.client_id) == 0){
                         logged_in = i+1;
                         break;
                     }
@@ -284,7 +305,7 @@ void on_login(Message msg, int fd, struct sockaddr* cli_addr){
                     sprintf(pre_pkt_string, "%d:%d:%s:%s", 
                         LO_NAK, 
                         28,
-                        msg.source, 
+                        msg.client_id, 
                         "Client is already logged in"
                     );
                     send(fd, pre_pkt_string, sizeof(pre_pkt_string), 0);
@@ -293,23 +314,23 @@ void on_login(Message msg, int fd, struct sockaddr* cli_addr){
                 }
 
                 // Add to connected clients
-                insert_cli(msg.source, NULL, cli_addr, head_cli);
+                insert_cli(msg.client_id, NULL, cli_addr, head_cli);
 
                 // Send back Lo_ACK
                 char pre_pkt_string[200];
                 sprintf(pre_pkt_string, "%d:%d:%s:%s", 
                     LO_ACK, 
                     0, 
-                    msg.source, 
+                    msg.client_id, 
                     ""
                 );
                 send(fd, pre_pkt_string, sizeof(pre_pkt_string), 0);
 }
 
-void on_join(Message msg, int fd){
+void on_join(struct m_data msg, int fd){
     
     // Check if session exists
-    struct session_node* client_session = find_sess(msg.data, head_sess);
+    struct session_node* client_session = find_sess(msg.client_data, head_sess);
     if(client_session == NULL){
         // Session does not exist
         // Send JN_NAK
@@ -318,7 +339,7 @@ void on_join(Message msg, int fd){
         sprintf(pre_pkt_string, "%d:%d:%s:%s", 
             JN_NAK, 
             strlen(data), 
-            msg.source, 
+            msg.client_id, 
             data
         );
         send(fd, pre_pkt_string, sizeof(pre_pkt_string), 0);
@@ -336,7 +357,7 @@ void on_join(Message msg, int fd){
         sprintf(pre_pkt_string, "%d:%d:%s:%s", 
             JN_NAK, 
             strlen(data), 
-            msg.source, 
+            msg.client_id, 
             data
         );
         send(fd, pre_pkt_string, sizeof(pre_pkt_string), 0);
@@ -350,17 +371,17 @@ void on_join(Message msg, int fd){
     char pre_pkt_string[200];
     sprintf(pre_pkt_string, "%d:%d:%s:%s", 
         JN_ACK, 
-        sizeof(msg.data), 
-        msg.source, 
-        msg.data
+        sizeof(msg.client_data), 
+        msg.client_id, 
+        msg.client_data
     );
     send(fd, pre_pkt_string, sizeof(pre_pkt_string), 0);
 }
 
-void on_new_sess(Message msg, int fd){
+void on_new_sess(struct m_data msg, int fd){
 
     // Check if already joined a session 
-    struct client_node* client = find_cli(msg.source, head_cli);
+    struct client_node* client = find_cli(msg.client_id, head_cli);
     if(client->session_ID != NULL) {
         // Already joined a session
         // Send NS_NAK
@@ -369,7 +390,7 @@ void on_new_sess(Message msg, int fd){
         sprintf(pre_pkt_string, "%d:%d:%s:%s", 
             NS_NAK, 
             strlen(data), 
-            msg.source, 
+            msg.client_id, 
             data
         );
         send(fd, pre_pkt_string, sizeof(pre_pkt_string), 0);
@@ -377,7 +398,7 @@ void on_new_sess(Message msg, int fd){
     }
 
     // Check if session already exists
-    struct session_node* client_session = find_sess(msg.data, head_sess);
+    struct session_node* client_session = find_sess(msg.client_data, head_sess);
     if(client_session != NULL){
         // Session already exists
         // Send NS_NAK
@@ -386,7 +407,7 @@ void on_new_sess(Message msg, int fd){
         sprintf(pre_pkt_string, "%d:%d:%s:%s", 
             NS_NAK, 
             strlen(data), 
-            msg.source, 
+            msg.client_id, 
             data
         );
         send(fd, pre_pkt_string, sizeof(pre_pkt_string), 0);
@@ -396,26 +417,26 @@ void on_new_sess(Message msg, int fd){
 
 
     // Create new session 
-    struct session_node* current = insert_sess(msg.data, head_sess);
+    struct session_node* current = insert_sess(msg.client_data, head_sess);
 
     // Join the session 
-    insert_cli(ID, msg.data, NULL, current->head_c);
+    insert_cli(ID, msg.client_data, NULL, current->head_c);
     
     // Send JN_ACK
     char pre_pkt_string[200];
     sprintf(pre_pkt_string, "%d:%d:%s:%s", 
         JN_ACK, 
-        sizeof(msg.data), 
-        msg.source, 
-        msg.data
+        sizeof(msg.client_data), 
+        msg.client_id, 
+        msg.client_data
     );
     send(fd, pre_pkt_string, sizeof(pre_pkt_string), 0);
 }
 
-void on_message(Message msg, int fd){
+void on_message(struct m_data msg, int fd){
 
     // Get the client's session id
-    struct client_node* client = find_cli(ID, head_cli);
+    struct client_node* client = find_cli(msg.client_id, head_cli);
     struct session_node* client_session = find_sess(client->session_ID, head_sess);
     
     client = client_session->head_c;
@@ -434,9 +455,9 @@ void on_message(Message msg, int fd){
         char pre_pkt_string[200];
         sprintf(pre_pkt_string, "%d:%d:%s:%s", 
             MESSAGE, 
-            sizeof(msg.data), 
-            msg.source, 
-            msg.data
+            sizeof(msg.client_data), 
+            msg.client_id, 
+            msg.client_data
         );
         send(temp_fd, pre_pkt_string, sizeof(pre_pkt_string), 0);
         close(temp_fd);   
@@ -501,7 +522,7 @@ void on_leave_sess(char *ID){
     }
 }
 
-void on_exit(char *ID){
+void on_logout(char *ID){
 
     // Remove the client from the connected list
     struct client_node* client = delete_cli(ID, head_cli);
