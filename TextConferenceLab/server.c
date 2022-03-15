@@ -112,38 +112,43 @@ int main(int argc, char *argv[]) {
 
     int sockfd;
     char buffer[MAXLINE];
-    struct sockaddr_in servaddr, cliaddr;
-    char cmd_buffer[30];
-    char path[2];
+    struct sockaddr_in servaddr, cliaddr;    
 
-    if (argc != 2) {
-        fprintf(stderr,"usage: server <TCP listen port>\n");
+    if (argc != 1) {
+        fprintf(stderr,"No arguments needed\n");
         exit(1);
     }
-    int port = atoi(argv[1]);
 
-    snprintf(cmd_buffer, sizeof(cmd_buffer), "/bin/nc -z 127.0.0.1 %d; echo $?", port);
-    /* Open the command for reading. */
     FILE *fp;
-    fp = popen(cmd_buffer, "r");
+    char path[500];
+    int port;
+
+    /* Open the command for reading. */
+    fp = popen("/bin/netstat -lnt", "r");
     if (fp == NULL) {
         printf("Failed to run command\n" );
         exit(1);
     }
 
-    /* Read the output a line at a time - output it. */
-    fgets(path, sizeof(path), fp);
-    printf("%s", path);
-    path[1] = '\n';
-    int port_open = atoi(path);
+    /* Read the output and get the first line that starts with tcp for IPv4 */
+    while (fgets(path, sizeof(path), fp) != NULL) {
+            if(!strncmp(path, "tcp ", 4)){
+                char *start;
+                start = strstr(path, "127.0.0.1:");
+                char *end = strstr(start+10," ");
+                int port_numlen = end - start-10;
+
+                char *port_str = malloc(port_numlen);
+                strncpy(port_str, start+10, port_numlen);
+                port = atoi(port_str);
+                break;
+            }
+    }
 
     /* close */
     pclose(fp);
 
-    if (port_open) {
-        printf("Port not available. Please run \"netstat -lnt\" and check those ports.\n" );
-        exit(1);
-    }
+    printf("Using port number %d", port);
        
     // Creating socket file descriptor
     if ( (sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0 ) {
@@ -206,6 +211,7 @@ int main(int argc, char *argv[]) {
         msg = parsemsg(buffer); 
         m_msg.type = msg.type;
         m_msg.size = msg.size;
+        // Turn the char arrays into char pointers to easily compare to NULL and such 
         strcpy(m_msg.client_data, msg.data);
         strcpy(m_msg.client_id, msg.source);
 
@@ -248,8 +254,6 @@ int main(int argc, char *argv[]) {
     close(sockfd);
     return 0;
 }
-
-
 
 void on_login(struct m_data msg, int fd, struct sockaddr* cli_addr){
     // Check if ID exists
@@ -445,8 +449,10 @@ void on_message(struct m_data msg, int fd){
             perror("socket creation failed");
             exit(EXIT_FAILURE);
         }
+        // Connect the socket
         connect(temp_fd, client->cli_addr,sizeof(client->cli_addr));
 
+        // Send the message packet
         char pre_pkt_string[200];
         sprintf(pre_pkt_string, "%d:%d:%s:%s", 
             MESSAGE, 
@@ -455,16 +461,26 @@ void on_message(struct m_data msg, int fd){
             msg.client_data
         );
         send(temp_fd, pre_pkt_string, sizeof(pre_pkt_string), 0);
+
+        // Close the temporary file descriptor
         close(temp_fd);   
 
-
+        // Next client
         client = client->next;
     }  
 }
 
 void on_query(char *ID, int fd){
+    // john and peter are logged in but not connected to a session
+    // jack and jill are part of the session called "lab_help"
+    // josh is part of a session called  "class_help"
+    // Example:
+    // "john:peter:session:lab_help:jack:jill:class_help:josh"
+
     char pre_pkt_string[1000];
     char data[500];
+
+    // Get the names of those not connected to a session first
     struct client_node* head = head_cli;
     while(head){
         if(head->session_ID == NULL){
@@ -472,9 +488,9 @@ void on_query(char *ID, int fd){
             strcat(data, head->ID);
         }
         head = head->next;
-        
     }
 
+    // Loop through all the clients in each session 
     struct session_node* head_s = head_sess;
     while(head_s){
         strcat(data, ":session:");
@@ -486,7 +502,6 @@ void on_query(char *ID, int fd){
             head_c = head_c->next;
         }
         head_s = head_s->next;
-        
     }
 
     sprintf(pre_pkt_string, "%d:%d:%s:%s", 
