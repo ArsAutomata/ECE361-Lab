@@ -8,7 +8,7 @@
 #include <netinet/in.h>
 #include <sys/time.h>
 #include <stdbool.h>
-#include <sys/fcntl.h> 
+#include <sys/fcntl.h>
 #include <errno.h>
 #include <poll.h>
 #include "message.h"
@@ -277,17 +277,19 @@ void leavesession()
 	return;
 }
 
-void printlist(char *string){
+void printlist(char *string)
+{
 	char s[MAX_DATA];
 	strcpy(s, string);
-    char* p = strtok(s, ":");
-    printf("no session\n");
-    while(p != NULL){
-            printf("%s\n", p);
-        
-        p = strtok(NULL,":");
-    }
-    return ;
+	char *p = strtok(s, ":");
+	printf("no session\n");
+	while (p != NULL)
+	{
+		printf("%s\n", p);
+
+		p = strtok(NULL, ":");
+	}
+	return;
 }
 
 void list()
@@ -370,109 +372,85 @@ int main()
 	// status
 	bool logged_in = false;
 
-	// login and make connection
-	while (!logged_in)
-	{
-		scanf("%s", cmd);
-		if (strcmp(cmd, "/login") == 0)
-		{
-			scanf(" %s %s %s %s", client_id, password, server_ip, server_port);
+	fd_set socketset;
 
-			login(client_id, password, server_ip, server_port);
-		}
-		else if (strcmp(cmd, "/quit") == 0)
+	while (1)
+	{
+		FD_ZERO(&socketset);
+		FD_SET(fileno(stdin), &socketset);
+
+		if (sockfd > 0)
 		{
-			return 0;
+			FD_SET(sockfd, &socketset);
+			select(sockfd + 1, &socketset, NULL, NULL, NULL);
 		}
 		else
 		{
-			printf("please login first\n");
-		}
-	}
-
-	// full access to menu
-	while (logged_in)
-	{
-		while (!in_session)
-		{
-			scanf("%s", cmd);
-
-			if (strcmp(cmd, "/login") == 0)
-			{
-				printf("already logged in");
-			}
-			else if (strcmp(cmd, "/logout") == 0)
-			{
-				logout();
-			}
-			else if (strcmp(cmd, "/joinsession") == 0)
-			{
-				scanf(" %s", session_id);
-				joinsession(session_id);
-			}
-			else if (strcmp(cmd, "/leavesession") == 0)
-			{
-				printf("invalid at this time\n");
-			}
-			else if (strcmp(cmd, "/createsession") == 0)
-			{
-				scanf(" %s", session_id);
-				createsession(session_id);
-			}
-			else if (strcmp(cmd, "/list") == 0)
-			{
-				list();
-			}
-			else if (strcmp(cmd, "/quit") == 0)
-			{
-				return 0;
-			}
-			else
-			{
-				printf("invalid command while not in a session\n");
-			}
+			select(fileno(stdin) + 1, &socketset, NULL, NULL, NULL);
 		}
 
-		while (in_session)
+		// Receive message
+		if (logged_in && FD_ISSET(sockfd, &socketset) && in_session)
 		{
-			// TODO:
-			//  Should be listening for packets on a non-blocking port as well somewhere here as long as you are in the session (it already is in connect)
-			//  probably should open a thread for getting user input while listening for packets on this thread (checkout beej's on listen(), and accept(), adn then you can call recv() once these two are done)
-			//  can use my code for reference on how to listen for stuff
+			char buf[MAX_DATA];
+			recv(sockfd, buffer, BUFFFER_SIZE - 1, 0);
 
-			// Constantly listen on this socket
-			listen(sockfd, 10);
-			int new_sockfd = accept(sockfd, (const struct sockaddr *)&servaddr, sizeof(servaddr));
-
-			recv(new_sockfd, buffer, BUFFFER_SIZE - 1, 0);
-
-			// process the buffer to see if it is text
-			clear_buffer();
 			Message *response = deserialize(buffer);
+			clear_buffer();
 			if (response->type == MESSAGE)
 			{
 				printf("%s", response->data);
 			}
-
-			// the code abovve should theoretically work, but it dosn't, idk why
+		}
+		else if (FD_ISSET(fileno(stdin), &socketset))
+		{
 
 			scanf("%s", cmd);
 
 			if (strcmp(cmd, "/login") == 0)
 			{
-				printf("already logged in\n");
+				if (logged_in)
+				{
+					printf("already logged in\n");
+				}
+				else
+				{
+					login(client_id, password, server_ip, server_port);
+				}
 			}
 			else if (strcmp(cmd, "/logout") == 0)
 			{
-				logout();
+				if (!logged_in)
+				{
+					printf("currently not logged in\n");
+				}
+				else
+				{
+					logout();
+				}
 			}
 			else if (strcmp(cmd, "/joinsession") == 0)
 			{
-				printf("already in a session\n");
+				scanf(" %s", session_id);
+				if (in_session)
+				{
+					printf("already in a session\n");
+				}
+				else
+				{
+					joinsession(session_id);
+				}
 			}
 			else if (strcmp(cmd, "/leavesession") == 0)
 			{
-				leavesession();
+				if (!in_session)
+				{
+					printf("not in a session\n");
+				}
+				else
+				{
+					leavesession();
+				}
 			}
 			else if (strcmp(cmd, "/createsession") == 0)
 			{
@@ -481,23 +459,22 @@ int main()
 			}
 			else if (strcmp(cmd, "/list") == 0)
 			{
-				printf("list");
 				list();
 			}
 			else if (strcmp(cmd, "/quit") == 0)
 			{
+				if(logged_in){
+					logout();
+				}
 				return 0;
 			}
 			else
 			{
-				char total_text[BUFFFER_SIZE];
-				char partial_text[800];
-				scanf("%[^\n]s", partial_text);
-
-				strcat(total_text, cmd);
-				strcat(total_text, partial_text);
-
-				send_text(total_text);
+				char totaltext[MAX_DATA];
+				strcpy(totaltext, cmd);
+				int cmdlen = strlen(cmd);
+				fgets(totaltext + cmdlen, MAX_DATA - cmdlen, stdin);
+				send_text(totaltext);
 			}
 		}
 	}
