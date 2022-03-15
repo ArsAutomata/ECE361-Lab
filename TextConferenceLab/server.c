@@ -226,6 +226,8 @@ int main(int argc, char *argv[]) {
         m_msg.type = msg.type;
         m_msg.size = msg.size;
         // Turn the char arrays into char pointers to easily compare to NULL and such 
+        m_msg.client_data = (char *)malloc(strlen(msg.data)+1);
+        m_msg.client_id = (char *)malloc(strlen(msg.data)+1);
         strcpy(m_msg.client_data, msg.data);
         strcpy(m_msg.client_id, msg.source);
 
