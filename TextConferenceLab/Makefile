@@ -8,7 +8,7 @@ clean:
 server.o: server.c link_list_impl.c message.h link_list_impl.h
 	$(CC) -c server.c link_list_impl.c
 
-client.o: client.c messages.h
+client.o: client.c message.h
 	$(CC) -c client.c
 
 link_list_impl.o: link_list_impl.c link_list_impl.h

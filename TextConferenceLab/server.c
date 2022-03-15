@@ -18,8 +18,16 @@
 #include "link_list_impl.h"
 #include "message.h"
 
-struct client_node *head_cli = NULL;
-struct session_node *head_sess = NULL;
+struct client_node* head_cli = NULL;
+struct session_node* head_sess = NULL;
+
+struct m_data{
+    unsigned int type;
+	unsigned int size;
+	char* client_id;
+	char* client_data;
+};
+
 
 void on_join(struct m_data msg, int fd);
 void on_new_sess(struct m_data msg, int fd);
@@ -28,13 +36,6 @@ void on_message(struct m_data msg, int fd);
 void on_query(char *ID, int fd);
 void on_leave_sess(char *ID);
 void on_logout(char *ID);
-
-struct m_data{
-    unsigned int type;
-	unsigned int size;
-	char* client_id;
-	char* client_data;
-};
 
 //parse the packet string
 Message parsemsg(char * msg){
@@ -86,7 +87,6 @@ Message parsemsg(char * msg){
    
     pkt.type = atoi(type); 
     pkt.size = atoi(size); 
-    pkt.source = (char *)malloc(strlen(source) + 1);
     strcpy(pkt.source, source);
 
     // Copy the msg data 
@@ -124,6 +124,7 @@ int main(int argc, char *argv[]) {
 
     snprintf(cmd_buffer, sizeof(cmd_buffer), "/bin/nc -z 127.0.0.1 %d; echo $?", port);
     /* Open the command for reading. */
+    FILE *fp;
     fp = popen(cmd_buffer, "r");
     if (fp == NULL) {
         printf("Failed to run command\n" );
@@ -131,7 +132,7 @@ int main(int argc, char *argv[]) {
     }
 
     /* Read the output a line at a time - output it. */
-    fgets(path, sizeof(path), fp) != NULL);
+    fgets(path, sizeof(path), fp);
     printf("%s", path);
     path[1] = '\n';
     int port_open = atoi(path);
@@ -187,6 +188,7 @@ int main(int argc, char *argv[]) {
     listen(sockfd, 100);
     Message msg;
     struct m_data m_msg;
+    int new_fd;
     
     while(1){
 
@@ -229,11 +231,11 @@ int main(int argc, char *argv[]) {
                 break;
 
             case MESSAGE:
-                on_message(m_msg, fd);
+                on_message(m_msg, new_fd);
                 break;
             
             case QUERY:
-                on_query(m_msg.client_id, fd);
+                on_query(m_msg.client_id, new_fd);
                 break;
 
             default:
@@ -290,16 +292,9 @@ void on_login(struct m_data msg, int fd, struct sockaddr* cli_addr){
                 }
 
                 // Check if already logged in
-                int logged_in = 0;
-                int arrLen = sizeof(session_info.logged_in_list)) / sizeof(session_info.logged_in_list[0]);
-                for (int i =0; i < arrLen; i++){
-                    if (strcmp(session_info.logged_in_list[i].ID, msg.client_id) == 0){
-                        logged_in = i+1;
-                        break;
-                    }
-                }
+                struct client_node* client = find_cli(msg.client_id, head_cli);
 
-                if(logged_in == 0){
+                if(client != NULL){
                     // Send NACK
                     char pre_pkt_string[200];
                     sprintf(pre_pkt_string, "%d:%d:%s:%s", 
@@ -348,7 +343,7 @@ void on_join(struct m_data msg, int fd){
     
     // Check if have already joined a session
 
-    struct client_node* client = find_cli(ID, head_cli);
+    struct client_node* client = find_cli(msg.client_id, head_cli);
     if(client->session_ID != NULL) {
         // Already joined a session
         // Send JN_NAK
@@ -365,7 +360,7 @@ void on_join(struct m_data msg, int fd){
     }
 
     // Add client to conference session 
-    insert_cli(ID, client_session->ID, NULL,client_session->head_c);
+    insert_cli(msg.client_id, client_session->ID, NULL,client_session->head_c);
     
     // Send JN_ACK
     char pre_pkt_string[200];
@@ -420,7 +415,7 @@ void on_new_sess(struct m_data msg, int fd){
     struct session_node* current = insert_sess(msg.client_data, head_sess);
 
     // Join the session 
-    insert_cli(ID, msg.client_data, NULL, current->head_c);
+    insert_cli(msg.client_id, msg.client_data, NULL, current->head_c);
     
     // Send JN_ACK
     char pre_pkt_string[200];
@@ -480,7 +475,7 @@ void on_query(char *ID, int fd){
         
     }
 
-    struct client_node* head_s = head_sess;
+    struct session_node* head_s = head_sess;
     while(head_s){
         strcat(data, ":session:");
         strcat(data, head_s->ID);

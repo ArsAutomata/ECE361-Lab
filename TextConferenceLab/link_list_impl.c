@@ -2,24 +2,12 @@
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
-// Nodes for logged_in list
-struct client_node {
-    char* ID;
-    char* session_ID;
-    struct sockaddr* cli_addr;
-    struct client_node *next;
-};
 
-// Nodes for conference session list
-struct session_node {
-    char* ID;
-    struct client_node *head_c;
-    struct session_node *next;
-};
+#include "link_list_impl.h"
 
 
 //insert link at the first location of logged in list
-void insert_cli(char* ID, char* session_ID, struct sockaddr* cli_addr, struct client_node *head_c) {
+void insert_cli(char* ID, char* session_ID, struct sockaddr* cli_addr, struct client_node* head_c) {
    //create a link
    struct client_node *link = (struct client_node*) malloc(sizeof(struct client_node));
 	

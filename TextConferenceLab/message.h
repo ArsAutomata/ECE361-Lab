@@ -29,7 +29,7 @@ char pw_arr[6][20] = {
 	"peeword",
 	"123"};
 
-typedef enum TYPES
+enum TYPES
 {
 	LOGIN,
 	LO_ACK,
