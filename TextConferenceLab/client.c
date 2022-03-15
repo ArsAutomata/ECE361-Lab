@@ -151,6 +151,13 @@ void createsession(char *session_id)
 	strcpy(create_string, buffer);
 
 	send_buffer();
+
+	if ((num_bytes = recv(sockfd, buffer, BUFFFER_SIZE - 1, 0)) == -1)
+	{
+		printf("failed create");
+		return;
+	}
+
 	return;
 }
 
@@ -173,8 +180,13 @@ void joinsession(char *session_id)
 	int num_bytes;
 	strcpy(join_string, buffer);
 
-	if (send_buffer() == true)
+	send_buffer(); 
+
+	if ((num_bytes = recv(sockfd, buffer, BUFFFER_SIZE - 1, 0)) == -1)
 	{
+		printf("failed create");
+		return;
+	}else{
 		in_session = true;
 		return;
 	}
