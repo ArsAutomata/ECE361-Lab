@@ -22,7 +22,6 @@
 
 struct client_node *head_cli = NULL;
 struct session_node *head_sess = NULL;
-
 struct m_data
 {
     unsigned int type;
@@ -38,6 +37,7 @@ void on_message(struct m_data msg, int fd);
 void on_query(char *ID, int fd);
 void on_leave_sess(char *ID);
 void on_logout(char *ID);
+
 
 // parse the packet string
 Message parsemsg(char *msg)
@@ -119,24 +119,16 @@ void clearBuf(char *b)
         b[i] = '\0';
 }
 
-// Creates and binds a socket, then waits for the first packet to open a file and start writing data to it.
-// On last packet, write the data and close the file descriptor
-int main(int argc, char *argv[])
-{
+int get_listener_sock(){
+    int fd;
+    int yes = 1;
+    int rv;
 
-    int sockfd;
-    char buffer[MAXLINE];
-    struct sockaddr_in servaddr, cliaddr;
-
-    if (argc != 1)
-    {
-        fprintf(stderr, "No arguments needed\n");
-        exit(1);
-    }
-
+    struct addrinfo hints, *ai, *p;
+    // Get a port
     FILE *fp;
     char path[1000];
-    int port;
+    char *port_str;
 
     /* Open the command for reading. */
     fp = popen("netstat -lnt", "r");
@@ -160,131 +152,246 @@ int main(int argc, char *argv[])
             char *end = strstr(start, " ");
 
             int port_numlen = end - start - strlen(localhost);
-            char *port_str = malloc(port_numlen);
+            port_str = malloc(port_numlen);
             strncpy(port_str, start + strlen(localhost), port_numlen);
-            port = atoi(port_str);
+            
             break;
         }
     }
 
-    /* close */
+     /* close */
     pclose(fp);
 
-    fprintf(stderr, "Using port number %d\n", port);
+    fprintf(stderr, "Using port number %s\n", port_str);
 
-    // Creating socket file descriptor
-    if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
-    {
-        perror("socket creation failed");
-        exit(EXIT_FAILURE);
+    // Get us a socket and bind it
+    memset(&hints, 0, sizeof hints);
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_flags = AI_PASSIVE;
+    if ((rv = getaddrinfo(NULL, port_str, &hints, &ai)) != 0) {
+        fprintf(stderr, "selectserver: %s\n", gai_strerror(rv));
+        exit(1);
+    }
+    for(p = ai; p != NULL; p = p->ai_next) {
+        fd = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
+        if(fd < 0){
+            continue;
+        }
+        setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int));
+        if (bind(fd, p->ai_addr, p->ai_addrlen) < 0) {
+            close(fd);
+            continue;
+        }
+        break;
+    }
+    freeaddrinfo(ai);
+
+    if(p == NULL){
+        return -1;
     }
 
-    // Set to non-blocking
-    fcntl(sockfd, F_SETFL, O_NONBLOCK);
+    if (listen(fd, 100) == -1) {
+        return -1;
+    }
+    return fd;
+}
 
-    memset(&servaddr, 0, sizeof(servaddr));
-    memset(&cliaddr, 0, sizeof(cliaddr));
+// Creates and binds a socket, then waits for the first packet to open a file and start writing data to it.
+// On last packet, write the data and close the file descriptor
+int main(int argc, char *argv[])
+{
+    char buffer[MAXLINE];
+    int sockfd;
+    struct sockaddr_in servaddr, cliaddr;
 
-    // get IP address of local machine
-    char hostbuffer[256];
-    gethostname(hostbuffer, sizeof(hostbuffer));
-    char *IPbuffer;
-    struct hostent *host_entry;
-    host_entry = gethostbyname(hostbuffer);
-    IPbuffer = inet_ntoa(*((struct in_addr *)host_entry->h_addr_list[0]));
-    if (IPbuffer == NULL)
+    if (argc != 1)
     {
-        printf("Couldn't get IP of local machine");
+        fprintf(stderr, "No arguments needed\n");
         exit(1);
     }
 
-    // Filling server information
-    servaddr.sin_family = AF_INET; // IPv4
-    servaddr.sin_addr.s_addr = inet_addr(IPbuffer);
-    servaddr.sin_port = htons(port);
+    
+    // int bind_failed = 1;
+    // while(bind_failed){
+        
 
-    // Bind the socket with the server address
-    if (bind(sockfd, (const struct sockaddr *)&servaddr,
-             sizeof(servaddr)) < 0)
-    {
-        perror("bind failed");
-        exit(EXIT_FAILURE);
-    }
+    //     // Creating socket file descriptor
+    //     if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+    //     {
+    //         perror("socket creation failed");
+    //         exit(EXIT_FAILURE);
+    //     }
+
+    //     // Set to non-blocking
+    //     fcntl(sockfd, F_SETFL, O_NONBLOCK);
+
+    //     memset(&servaddr, 0, sizeof(servaddr));
+    //     memset(&cliaddr, 0, sizeof(cliaddr));
+
+    //     // get IP address of local machine
+    //     char hostbuffer[256];
+    //     gethostname(hostbuffer, sizeof(hostbuffer));
+    //     char *IPbuffer;
+    //     struct hostent *host_entry;
+    //     host_entry = gethostbyname(hostbuffer);
+    //     IPbuffer = inet_ntoa(*((struct in_addr *)host_entry->h_addr_list[0]));
+    //     if (IPbuffer == NULL)
+    //     {
+    //         printf("Couldn't get IP of local machine");
+    //         exit(1);
+    //     }
+
+    //     // Filling server information
+    //     servaddr.sin_family = AF_INET; // IPv4
+    //     servaddr.sin_addr.s_addr = inet_addr(IPbuffer);
+    //     servaddr.sin_port = htons(port);
+
+    //     // Bind the socket with the server address
+    //     if (bind(sockfd, (const struct sockaddr *)&servaddr,
+    //             sizeof(servaddr)) < 0)
+    //     {
+    //         perror("bind failed");
+    //         fprintf(stderr, "\nTrying again...");
+    //         bind_failed = 1;
+    //         // exit(EXIT_FAILURE);
+    //     }
+    //     bind_failed = 0;
+    // }
 
     int len = sizeof(cliaddr);
-
-    // Constantly listen on this socket
-    listen(sockfd, 100);
     Message msg;
     struct m_data m_msg;
+    // Constantly listen on this socket
+    sockfd = get_listener_sock();
+    if(sockfd == -1){
+        fprintf(stderr, "error getting listening socket");
+        exit(1);
+    }
+    
     int new_fd;
-    struct pollfd pfds[1];
+    struct pollfd pfds[NUMTOTALCLIENTS+1];
     pfds[0].fd = sockfd;
     pfds[0].events = POLLIN;
 
     while (1)
-    {
+    {   
+        memset(pfds, 0, NUMTOTALCLIENTS+1);
+        pfds[0].fd = sockfd;
+        pfds[0].events = POLLIN;
 
-        // Get the new connection and new fd!
-        new_fd = accept(sockfd, (struct sockaddr *)&cliaddr,
+        struct client_node* head = head_cli;
+        int active[NUMTOTALCLIENTS];
+        int itr = 0;
+        while(head){
+            active[itr] = head->fd;
+            head = head->next; 
+            itr++;
+        }
+        int active_len = sizeof(active) / sizeof(active[0]);
+        for (int i = 0; i < active_len; i++) {
+            pfds[i+1].fd = active[i];
+            pfds[i+1].events = POLLIN;
+        }
+
+       int num_events = poll(pfds, NUMTOTALCLIENTS+1, -1);
+       if(num_events == -1){
+           perror("poll");
+           exit(1);
+       }
+
+        // Run through the existing connections looking for data to read
+        for(int i = 0; i < NUMTOTALCLIENTS+1; i++) {
+
+            if (pfds[i].revents & POLLIN) {
+                if (pfds[i].fd == sockfd) {
+                    // Handling new connection
+                    // Get the new connection and new fd!
+                    new_fd = accept(sockfd, (struct sockaddr *)&cliaddr,
                         &len);
-        if (new_fd < 0)
-        {
-            perror("accept failed, waiting for a connection");
-            if ((errno == ENETDOWN || errno == EPROTO || errno == ENOPROTOOPT || errno == EHOSTDOWN || errno == EHOSTUNREACH || errno == EOPNOTSUPP || errno == ENETUNREACH || errno == EAGAIN))
-            {
-                poll(pfds, 1, -1);
-                continue;
+                    if(new_fd == -1){
+                        perror("accept");
+                    }
+                    recv(new_fd, (char *)buffer, MAXLINE, 0);
+
+                    // Process the packet
+                    msg = parsemsg(buffer);
+                    m_msg.type = msg.type;
+                    m_msg.size = msg.size;
+                    // Turn the char arrays into char pointers to easily compare to NULL and such
+                    m_msg.client_data = (char *)malloc(strlen(msg.data) + 1);
+                    m_msg.client_id = (char *)malloc(strlen(msg.data) + 1);
+                    strcpy(m_msg.client_data, msg.data);
+                    strcpy(m_msg.client_id, msg.source);
+
+                    on_login(m_msg,new_fd, (struct sockaddr *)&cliaddr);
+                }else{
+                    // regular client
+                    int sender_fd = pfds[i].fd;
+                    int nbytes = recv(pfds[i].fd, (char *)buffer, MAXLINE, 0);
+                    if (nbytes <= 0) {
+                        // Got error or connection closed by client
+                        if (nbytes == 0) {
+                        // Connection closed
+                        printf("pollserver: socket %d hung up\n", sender_fd);
+                        } else {
+                        perror("recv");
+                        }
+
+                        close(pfds[i].fd); // Bye!
+                    }else{
+                        // Process the packet
+                        msg = parsemsg(buffer);
+                        m_msg.type = msg.type;
+                        m_msg.size = msg.size;
+                        // Turn the char arrays into char pointers to easily compare to NULL and such
+                        m_msg.client_data = (char *)malloc(strlen(msg.data) + 1);
+                        m_msg.client_id = (char *)malloc(strlen(msg.data) + 1);
+                        strcpy(m_msg.client_data, msg.data);
+                        strcpy(m_msg.client_id, msg.source);
+
+                        switch (msg.type){
+
+                            case LOGIN:
+                                on_login(m_msg,new_fd, (struct sockaddr *)&cliaddr);
+                                break;
+
+                            case JOIN:
+                                on_join(m_msg, new_fd);
+                                break;
+
+                            case EXIT:
+                                on_logout(m_msg.client_id);
+                                break;
+
+                            case LEAVE_SESS:
+                                on_leave_sess(m_msg.client_id);
+                                break;
+
+                            case NEW_SESS:
+                                fprintf(stderr, "on new sess");
+                                on_new_sess(m_msg, new_fd);
+                                break;
+
+                            case MESSAGE:
+                                on_message(m_msg, new_fd);
+                                break;
+
+                            case QUERY:
+                                on_query(m_msg.client_id, new_fd);
+                                break;
+
+                            default:
+                                printf("Shouldnt be here");
+                                exit(1);
+                            }
+                    
+                        
+                    }
+                }
             }
-            exit(1);
         }
 
-        recv(new_fd, (char *)buffer, MAXLINE, 0);
-
-        // Process the packet
-        msg = parsemsg(buffer);
-        m_msg.type = msg.type;
-        m_msg.size = msg.size;
-        // Turn the char arrays into char pointers to easily compare to NULL and such
-        m_msg.client_data = (char *)malloc(strlen(msg.data) + 1);
-        m_msg.client_id = (char *)malloc(strlen(msg.data) + 1);
-        strcpy(m_msg.client_data, msg.data);
-        strcpy(m_msg.client_id, msg.source);
-
-        switch (msg.type)
-        {
-
-        case LOGIN:
-            on_login(m_msg, new_fd, (struct sockaddr *)&cliaddr);
-            break;
-
-        case JOIN:
-            on_join(m_msg, new_fd);
-
-        case EXIT:
-            on_logout(m_msg.client_id);
-            break;
-
-        case LEAVE_SESS:
-            on_leave_sess(m_msg.client_id);
-            break;
-
-        case NEW_SESS:
-            on_new_sess(m_msg, new_fd);
-            break;
-
-        case MESSAGE:
-            on_message(m_msg, new_fd);
-            break;
-
-        case QUERY:
-            on_query(m_msg.client_id, new_fd);
-            break;
-
-        default:
-            printf("Shouldnt be here");
-            exit(1);
-        }
     }
 
     // Close the socket
@@ -294,7 +401,7 @@ int main(int argc, char *argv[])
 
 void on_login(struct m_data msg, int fd, struct sockaddr *cli_addr)
 {
-    printf("login message rec");    
+    fprintf(stderr, "In login");
     // Check if ID exists
     int ID_exist = 0;
     for (int i = 0; i < NUMTOTALCLIENTS; i++)
@@ -316,6 +423,7 @@ void on_login(struct m_data msg, int fd, struct sockaddr *cli_addr)
                 25,
                 msg.client_id,
                 "Client is not registered");
+                
         send(fd, pre_pkt_string, sizeof(pre_pkt_string), 0);
         close(fd);
         return;
@@ -354,7 +462,7 @@ void on_login(struct m_data msg, int fd, struct sockaddr *cli_addr)
     }
 
     // Add to connected clients
-    insert_cli(msg.client_id, NULL, cli_addr, head_cli);
+    insert_cli(msg.client_id, NULL, cli_addr, head_cli, fd);
 
     // Send back Lo_ACK
     char pre_pkt_string[200];
@@ -363,13 +471,14 @@ void on_login(struct m_data msg, int fd, struct sockaddr *cli_addr)
             0,
             msg.client_id,
             "data");
+    fprintf(stderr, "About to send?");
     send(fd, pre_pkt_string, sizeof(pre_pkt_string), 0);
+    fprintf(stderr, "sent?");
 }
 
 void on_join(struct m_data msg, int fd)
 {
 
-    printf("join message rec");       
     // Check if session exists
     struct session_node *client_session = find_sess(msg.client_data, head_sess);
     if (client_session == NULL)
@@ -406,7 +515,7 @@ void on_join(struct m_data msg, int fd)
     }
 
     // Add client to conference session
-    insert_cli(msg.client_id, client_session->ID, NULL, client_session->head_c);
+    insert_cli(msg.client_id, client_session->ID, NULL, client_session->head_c, fd);
 
     // Send JN_ACK
     char pre_pkt_string[200];
@@ -419,7 +528,8 @@ void on_join(struct m_data msg, int fd)
 }
 
 void on_new_sess(struct m_data msg, int fd)
-{
+{   
+    fprintf(stderr, "Creating new sess\n");
 
     // Check if already joined a session
     struct client_node *client = find_cli(msg.client_id, head_cli);
@@ -457,9 +567,10 @@ void on_new_sess(struct m_data msg, int fd)
 
     // Create new session
     struct session_node *current = insert_sess(msg.client_data, head_sess);
+    
 
     // Join the session
-    insert_cli(msg.client_id, msg.client_data, NULL, current->head_c);
+    insert_cli(msg.client_id, msg.client_data, NULL, current->head_c, fd);
 
     // Send JN_ACK
     char pre_pkt_string[200];
@@ -581,7 +692,7 @@ void on_leave_sess(char *ID)
 
 void on_logout(char *ID)
 {
-    printf("logout mes rec"); 
+
     // Remove the client from the connected list
     struct client_node *client = delete_cli(ID, head_cli);
     struct session_node *client_session = find_sess(client->session_ID, head_sess);

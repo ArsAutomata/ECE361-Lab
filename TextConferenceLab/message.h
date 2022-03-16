@@ -91,8 +91,10 @@ Message *deserialize(char *string)
 char *serialize(Message msg)
 {
 	char *string = malloc((MAX_NAME + MAX_DATA + 20) * sizeof(char));
-
+	
 	sprintf(string, "%d:%d:%s:%s", msg.type, msg.size, msg.source, msg.data);
+	
+	
 
 	return string;
 }

@@ -7,12 +7,13 @@
 
 
 //insert link at the first location of logged in list
-void insert_cli(char* ID, char* session_ID, struct sockaddr* cli_addr, struct client_node* head_c) {
+void insert_cli(char* ID, char* session_ID, struct sockaddr* cli_addr, struct client_node* head_c, int fd) {
    //create a link
    struct client_node *link = (struct client_node*) malloc(sizeof(struct client_node));
 	
    link->ID = ID;
    link->session_ID = session_ID;
+   link->fd = fd;
    if(cli_addr != NULL){
       link->cli_addr = cli_addr;
    }

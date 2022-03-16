@@ -47,11 +47,10 @@ bool send_buffer()
 {
 	num_bytes = send(sockfd, buffer, sizeof(buffer), 0);
 
-	if (num_bytes != -1)
-	{
-        fprintf(stderr, "client: send %s\n", buffer);
-        clear_buffer();		
-        return true;
+	if ((num_bytes = send(sockfd, buffer, BUFFER_SIZE - 1, 0)) >=0)
+	{	
+		fprintf(stderr, "send worked %s\n", buffer);
+		return true;
 	}
 	else
 	{
@@ -216,23 +215,27 @@ void createsession(char *session_id)
 
 	char *create_string = serialize(create_mes);
 	strcpy(buffer, create_string);
-
-	send_buffer();
-
-	// recieve data, print sucess on NS_ACK, print error data on NS_NAK
-	int num_bytes;
-	if ((num_bytes = recv(sockfd, buffer, BUFFER_SIZE - 1, 0)) == -1)
+	
+	if (!send_buffer())
 	{
-		printf("failed recieve");
+		fprintf(stderr,"Couldn't send create info\n");
+		return;
+	}
+	
+	int num_bytes = recv(sockfd, buffer, BUFFER_SIZE - 1, 0);
+	if (num_bytes == -1)
+	{
+		fprintf(stderr, "Failed to receive");
 		close(sockfd);
 		return;
 	}
 
+	fprintf(stderr, "This is the response %s", buffer);
 	Message *response = deserialize(buffer);
 	clear_buffer();
 	if (response->type == NS_ACK)
 	{
-		printf("session %s created\n", session_id);
+		fprintf(stderr, "session %s created\n", session_id);
 		in_session = true;
 		return;
 	}
@@ -374,6 +377,8 @@ int main()
 	socklen_t servaddr_len;
 	struct sockaddr_in servaddr;
 
+	// status
+	logged_in = false;
 
 	fd_set socketset;
 
@@ -386,8 +391,11 @@ int main()
 		if (sockfd > 0)
 		{
 			fprintf(stderr, "Might segfault\n");
-			FD_SET(sockfd, &socketset);
-			select(sockfd + 1, &socketset, NULL, NULL, NULL);
+			FD_SET(fileno(stdin), &socketset);
+			select(fileno(stdin) + 1, &socketset, NULL, NULL, NULL);
+			// TODO: it keeps looping here if i dont comment the below out
+			// FD_SET(sockfd, &socketset);
+			// select(sockfd + 1, &socketset, NULL, NULL, NULL);
 		}
 		else
 		{
@@ -415,6 +423,11 @@ int main()
 			{
 				if (logged_in)
 				{
+					char *garb;
+					scanf("%s", garb);
+					scanf("%s", garb);
+					scanf("%s", garb);
+					scanf("%s", garb);
 					printf("already logged in\n");
 				}
 				else
@@ -470,13 +483,14 @@ int main()
 			}
 			else if (strcmp(cmd, "/createsession") == 0)
 			{
-				scanf(" %s", session_id);
+				scanf("%s", session_id);
 				if (!logged_in)
 				{
 					printf("please log in first\n");
 				}
 				else
-				{
+				{	
+					fprintf(stderr, "about to create\n\n");
 					createsession(session_id);
 				}
 			}
@@ -497,7 +511,7 @@ int main()
 				{
 					logout();
 				}
-				return 0;
+				// return 0;
 			}
 			else
 			{
@@ -512,7 +526,11 @@ int main()
 						fgets(totaltext + cmdlen, MAX_DATA - cmdlen, stdin);
 						printf("sending message: %s", totaltext);
 						send_text(totaltext);
+					}else{
+						fprintf(stderr, "You are not currently in a session\n");
 					}
+				}else{
+					fprintf(stderr, "Please log in first\n");
 				}
 			}
 		}
