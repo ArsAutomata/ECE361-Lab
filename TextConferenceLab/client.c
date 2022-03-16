@@ -74,8 +74,6 @@ void login(char *client_id, char *password, char *server_ip, char *server_port)
 		exit(1);
 	}
 
-	// Set to non-blocking
-	fcntl(sockfd, F_SETFL, O_NONBLOCK);
 
 	memset(&servaddr, 0, sizeof(servaddr));
 	memset(&cliaddr, 0, sizeof(cliaddr));
@@ -144,7 +142,7 @@ void logout()
 	Message logout_mes;
 	logout_mes.type = EXIT;
 	logout_mes.size = MAX_NAME;
-	strcpy(logout_mes.size, client_id);
+	strcpy(logout_mes.source, client_id);
 	strcpy(logout_mes.data, "");
 
 	char *mes_string = serialize(logout_mes);
