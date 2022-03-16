@@ -355,7 +355,6 @@ int main()
 	char server_port[COMMAND_LEN];
 
 	// socket
-	int sockfd;
 	int num_bytes;
 	socklen_t servaddr_len;
 	struct sockaddr_in servaddr;
