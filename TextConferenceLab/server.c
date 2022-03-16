@@ -294,6 +294,7 @@ int main(int argc, char *argv[])
 
 void on_login(struct m_data msg, int fd, struct sockaddr *cli_addr)
 {
+    printf("login message rec");    
     // Check if ID exists
     int ID_exist = 0;
     for (int i = 0; i < NUMTOTALCLIENTS; i++)
@@ -368,6 +369,7 @@ void on_login(struct m_data msg, int fd, struct sockaddr *cli_addr)
 void on_join(struct m_data msg, int fd)
 {
 
+    printf("join message rec");       
     // Check if session exists
     struct session_node *client_session = find_sess(msg.client_data, head_sess);
     if (client_session == NULL)
@@ -579,7 +581,7 @@ void on_leave_sess(char *ID)
 
 void on_logout(char *ID)
 {
-
+    printf("logout mes rec"); 
     // Remove the client from the connected list
     struct client_node *client = delete_cli(ID, head_cli);
     struct session_node *client_session = find_sess(client->session_ID, head_sess);

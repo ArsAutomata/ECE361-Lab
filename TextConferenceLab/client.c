@@ -16,8 +16,11 @@
 
 #define COMMAND_LEN 100
 #define BUFFER_SIZE 1200
-bool logged_in;
-bool in_session;
+
+
+// status
+bool logged_in = false;
+bool in_session = false;
 
 // socket
 int sockfd = -1;
@@ -46,15 +49,18 @@ bool send_buffer()
 
 	if (num_bytes != -1)
 	{
-		return true;
+        fprintf(stderr, "client: send %s\n", buffer);
+        clear_buffer();		
+        return true;
 	}
 	else
 	{
 		printf("Could not send.\n");
+        clear_buffer();
 		return false;
 	}
 
-	clear_buffer();
+	
 }
 
 void login(char *client_id, char *password, char *server_ip, char *server_port)
@@ -97,6 +103,8 @@ void login(char *client_id, char *password, char *server_ip, char *server_port)
 	strcpy(login_mes.data, password);
 	login_mes.size = strlen(password);
 	strcpy(buffer, serialize(login_mes));
+
+    printf("%s\n", buffer);
 	if (!send_buffer())
 	{
 		fprintf(stderr, "Couldn't send login info\n");
@@ -110,13 +118,14 @@ void login(char *client_id, char *password, char *server_ip, char *server_port)
 		close(sockfd);
 		return;
 	}
-
+    printf("%s\n", buffer);
 	Message *response = deserialize(buffer);
 	clear_buffer();
 	if (response->type == LO_ACK)
 	{
 		fprintf(stderr, "Logged in successfully!\n");
 		logged_in = true;
+        fprintf(stderr, "login = %d\n", logged_in);
 		return;
 	}
 	else if (response->type == LO_NAK)
@@ -135,17 +144,22 @@ void logout()
 {
 	Message logout_mes;
 	logout_mes.type = EXIT;
-	logout_mes.size = MAX_NAME;
+	logout_mes.size = strlen("blank");
 	strcpy(logout_mes.source, client_id);
-	strcpy(logout_mes.data, "");
+	strcpy(logout_mes.data, "blank");
 
 	char *mes_string = serialize(logout_mes);
-	printf("%s", mes_string);
 
 	strcpy(buffer, mes_string);
+    printf("buffer: %s\n", buffer);
+    send_buffer();
+    printf("buffer: %s\n", buffer);
 
 	close(sockfd);
+    printf("socket closed\n");
 	logged_in = false;
+    printf("login = %d\n", logged_in); 
+    return;
 }
 
 void joinsession(char *session_id)
@@ -360,8 +374,6 @@ int main()
 	socklen_t servaddr_len;
 	struct sockaddr_in servaddr;
 
-	// status
-	bool logged_in = false;
 
 	fd_set socketset;
 
@@ -373,7 +385,7 @@ int main()
 
 		if (sockfd > 0)
 		{
-			fprintf(stderr, "Might segfault");
+			fprintf(stderr, "Might segfault\n");
 			FD_SET(sockfd, &socketset);
 			select(sockfd + 1, &socketset, NULL, NULL, NULL);
 		}
