@@ -432,7 +432,11 @@ int main()
 			else if (strcmp(cmd, "/joinsession") == 0)
 			{
 				scanf(" %s", session_id);
-				if (in_session)
+				if (!logged_in)
+				{
+					printf("please log in first\n");
+				}
+				else if (in_session)
 				{
 					printf("already in a session\n");
 				}
@@ -443,7 +447,11 @@ int main()
 			}
 			else if (strcmp(cmd, "/leavesession") == 0)
 			{
-				if (!in_session)
+				if (!logged_in)
+				{
+					printf("please log in first\n");
+				}
+				else if (!in_session)
 				{
 					printf("not in a session\n");
 				}
@@ -455,26 +463,49 @@ int main()
 			else if (strcmp(cmd, "/createsession") == 0)
 			{
 				scanf(" %s", session_id);
-				createsession(session_id);
+				if (!logged_in)
+				{
+					printf("please log in first\n");
+				}
+				else
+				{
+					createsession(session_id);
+				}
 			}
 			else if (strcmp(cmd, "/list") == 0)
 			{
-				list();
+				if (!logged_in)
+				{
+					printf("please log in first\n");
+				}
+				else
+				{
+					list();
+				}
 			}
 			else if (strcmp(cmd, "/quit") == 0)
 			{
-				if(logged_in){
+				if (logged_in)
+				{
 					logout();
 				}
 				return 0;
 			}
 			else
 			{
-				char totaltext[MAX_DATA];
-				strcpy(totaltext, cmd);
-				int cmdlen = strlen(cmd);
-				fgets(totaltext + cmdlen, MAX_DATA - cmdlen, stdin);
-				send_text(totaltext);
+				// send the text if logged in and in a session
+				if (logged_in)
+				{
+					if (in_session)
+					{
+						char totaltext[MAX_DATA];
+						strcpy(totaltext, cmd);
+						int cmdlen = strlen(cmd);
+						fgets(totaltext + cmdlen, MAX_DATA - cmdlen, stdin);
+						printf("sending message: %s", totaltext);
+						send_text(totaltext);
+					}
+				}
 			}
 		}
 	}
