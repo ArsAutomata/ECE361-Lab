@@ -15,7 +15,7 @@
 #include <poll.h>
 
 #define MAXLINE 1250
-#define NUMTOTALCLIENTS 5
+#define NUMTOTALCLIENTS 6
 
 #include "link_list_impl.h"
 #include "message.h"
@@ -361,7 +361,7 @@ void on_login(struct m_data msg, int fd, struct sockaddr *cli_addr)
             LO_ACK,
             0,
             msg.client_id,
-            "");
+            "data");
     send(fd, pre_pkt_string, sizeof(pre_pkt_string), 0);
 }
 

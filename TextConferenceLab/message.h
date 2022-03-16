@@ -65,16 +65,16 @@ Message *deserialize(char *string)
 	char *size;
 	char *source;
 	char *data;
-
 	// store
 	typevar = strtok(string, ":");
 	size = strtok(NULL, ":");
 	source = strtok(NULL, ":");
-	data = strtok(NULL, "");
+	data = strtok(NULL, ":");
 
 	// exception handle
 	if (typevar == NULL || size == NULL || source == NULL || data == NULL)
 	{
+		fprintf(stderr, "\nException! this shouldn't happen\n");
 		return NULL;
 	}
 

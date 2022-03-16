@@ -18,7 +18,7 @@ bool logged_in;
 bool in_session;
 
 // socket
-int sockfd;
+int sockfd=-1;
 int num_bytes;
 socklen_t servaddr_len;
 struct sockaddr_in servaddr;
@@ -41,7 +41,7 @@ void clear_buffer()
 bool send_buffer()
 {
 
-	if ((num_bytes = send(sockfd, buffer, BUFFFER_SIZE - 1, 0)) == -1)
+	if ((num_bytes = send(sockfd, buffer, BUFFFER_SIZE - 1, 0)) != -1)
 	{
 		return true;
 	}
@@ -66,7 +66,6 @@ void login(char *client_id, char *password, char *server_ip, char *server_port)
 	struct sockaddr_in servaddr, cliaddr;
 
 	int port = atoi(server_port);
-	fprintf(stderr,"Creating the socket");
 	// Creating socket file descriptor
 	if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
 	{
@@ -82,61 +81,52 @@ void login(char *client_id, char *password, char *server_ip, char *server_port)
 	servaddr.sin_family = AF_INET; // IPv4
 	servaddr.sin_addr.s_addr = inet_addr(server_ip);
 	servaddr.sin_port = htons(port);
-	fprintf(stderr,"About to connect");
-	fprintf(stderr, "this is %s %d", server_ip, port);
 	// connect on client side
 	if (connect(sockfd, (const struct sockaddr *)&servaddr, sizeof(servaddr)) == -1)
 	{
 		logged_in = false;
-		fprintf(stderr, "this is %s %d", server_ip, port);
 		perror("could not connect to server");
 		return;
 	}
-	fprintf(stderr,"COnnected!");
 
 	Message login_mes;
 	login_mes.type = LOGIN;
 	strcpy(login_mes.source, client_id);
 	strcpy(login_mes.data, password);
 	login_mes.size = strlen(password);
-
 	strcpy(buffer, serialize(login_mes));
-	if (send_buffer() == true)
+	if (!send_buffer())
 	{
-		printf("client sent");
-	}
-	else
-	{
-		printf("could not send login info\n");
+		fprintf(stderr,"Couldn't send login info\n");
 		return;
 	}
+	
 
-	int num_bytes;
-	if ((num_bytes = recv(sockfd, buffer, BUFFFER_SIZE - 1, 0)) == -1)
+	int num_bytes = recv(sockfd, buffer, BUFFFER_SIZE - 1, 0);
+	if (num_bytes == -1)
 	{
-		printf("failed recieve");
+		fprintf(stderr, "Failed to receive");
 		close(sockfd);
 		return;
 	}
-
+	
 	Message *response = deserialize(buffer);
 	clear_buffer();
-
 	if (response->type == LO_ACK)
 	{
-		printf("logged in\n");
+		fprintf(stderr,"Logged in successfully!\n");
 		logged_in = true;
 		return;
 	}
 	else if (response->type == LO_NAK)
 	{
-		printf("%s", response->data);
+		fprintf(stderr,"Login failed: %s\n", response->data);
 		close(sockfd);
 		return;
 	}
 	else
 	{
-		printf("very big wrong ahhh!");
+		fprintf(stderr, "very big wrong ahhh!");
 	}
 }
 
@@ -377,32 +367,28 @@ int main()
 
 	while (1)
 	{
-		fprintf(stderr,"Starting 1");
+		
 		FD_ZERO(&socketset);
 		FD_SET(fileno(stdin), &socketset);
 
-		fprintf(stderr,"Starting 2");
+		
 		if (sockfd > 0)
 		{
-			fprintf(stderr,"Starting 2.a");
+			fprintf(stderr,"Might segfault");
 			FD_SET(sockfd, &socketset);
-			fprintf(stderr,"Here?");
 			select(sockfd + 1, &socketset, NULL, NULL, NULL);
-			fprintf(stderr,"Starting here?");
 		}
 		else
 		{
-			fprintf(stderr,"Starting 2.b");
+			
 			select(fileno(stdin) + 1, &socketset, NULL, NULL, NULL);
 		}
-		fprintf(stderr,"Starting 3");
 
 		// Receive message
 		if (logged_in && FD_ISSET(sockfd, &socketset) && in_session)
 		{
 			char buf[MAX_DATA];
 			recv(sockfd, buffer, BUFFFER_SIZE - 1, 0);
-			printf("peepeepoopoo %s", buffer);
 			Message *response = deserialize(buffer);
 			clear_buffer();
 			if (response->type == MESSAGE)
@@ -412,7 +398,6 @@ int main()
 		}
 		else if (FD_ISSET(fileno(stdin), &socketset))
 		{
-
 			scanf("%s", cmd);
 
 
@@ -424,7 +409,6 @@ int main()
 				}
 				else
 				{
-					fprintf(stderr,"Getting login things");
 					scanf("%s", client_id);
 					scanf("%s", password);
 					scanf("%s", server_ip);
@@ -445,7 +429,7 @@ int main()
 			}
 			else if (strcmp(cmd, "/joinsession") == 0)
 			{
-				scanf(" %s", session_id);
+				scanf("%s", session_id);
 				if (!logged_in)
 				{
 					printf("please log in first\n");
