@@ -15,7 +15,7 @@
 #include <netdb.h>
 
 #define COMMAND_LEN 100
-#define BUFFER_SIZE 1200
+#define BUFFER_SIZE 1000
 
 
 // status
@@ -47,9 +47,9 @@ bool send_buffer()
 {
 	num_bytes = send(sockfd, buffer, sizeof(buffer), 0);
 
-	if ((num_bytes = send(sockfd, buffer, BUFFER_SIZE - 1, 0)) >=0)
+	if (num_bytes >=0)
 	{	
-		fprintf(stderr, "send worked %s\n", buffer);
+
 		return true;
 	}
 	else
@@ -65,6 +65,7 @@ bool send_buffer()
 void login(char *client_id, char *password, char *server_ip, char *server_port)
 {
 	// check for possible errors
+
 	if (client_id == NULL || password == NULL || server_ip == NULL || server_port == NULL)
 	{
 		printf("incorrect usage of login");
@@ -230,7 +231,7 @@ void createsession(char *session_id)
 		return;
 	}
 
-	fprintf(stderr, "This is the response %s", buffer);
+
 	Message *response = deserialize(buffer);
 	clear_buffer();
 	if (response->type == NS_ACK)
@@ -305,7 +306,7 @@ void list()
 {
 	if (!in_session)
 	{
-		printf("You are not in a session.\n");
+		fprintf(stderr, "You are not in a session.\n");
 		return;
 	}
 
@@ -318,9 +319,9 @@ void list()
 
 	char *list_string = serialize(list_mes);
 	strcpy(buffer, list_string);
-
+    
 	send_buffer();
-
+    
 	// TODO: call recv to get the QU_ACK
 	//  print out the user list and their sessions
 	if ((num_bytes = recv(sockfd, buffer, BUFFER_SIZE - 1, 0)) == -1)
@@ -390,7 +391,7 @@ int main()
 
 		if (sockfd > 0)
 		{
-			fprintf(stderr, "Might segfault\n");
+
 			FD_SET(fileno(stdin), &socketset);
 			select(fileno(stdin) + 1, &socketset, NULL, NULL, NULL);
 			// TODO: it keeps looping here if i dont comment the below out
@@ -420,7 +421,8 @@ int main()
 			scanf("%s", cmd);
 
 			if (strcmp(cmd, "/login") == 0)
-			{
+			{   
+                fprintf(stderr, "scannig?");
 				if (logged_in)
 				{
 					char *garb;
@@ -431,7 +433,7 @@ int main()
 					printf("already logged in\n");
 				}
 				else
-				{
+				{   
 					scanf("%s", client_id);
 					scanf("%s", password);
 					scanf("%s", server_ip);
@@ -511,7 +513,7 @@ int main()
 				{
 					logout();
 				}
-				// return 0;
+				 return 0;
 			}
 			else
 			{

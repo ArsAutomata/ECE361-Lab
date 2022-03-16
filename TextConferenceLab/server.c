@@ -22,6 +22,10 @@
 
 struct client_node *head_cli = NULL;
 struct session_node *head_sess = NULL;
+
+
+struct client_node conn_clients_list[6];
+
 struct m_data
 {
     unsigned int type;
@@ -166,7 +170,7 @@ int get_listener_sock(){
 
     // Get us a socket and bind it
     memset(&hints, 0, sizeof hints);
-    hints.ai_family = AF_UNSPEC;
+    hints.ai_family = AF_INET;
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_flags = AI_PASSIVE;
     if ((rv = getaddrinfo(NULL, port_str, &hints, &ai)) != 0) {
@@ -176,10 +180,15 @@ int get_listener_sock(){
     for(p = ai; p != NULL; p = p->ai_next) {
         fd = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
         if(fd < 0){
+               fprintf(stderr, "bbbbbb");
             continue;
         }
-        setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int));
+        if(setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int)) == -1){
+            perror("setsockopt");
+            exit(1);
+        }
         if (bind(fd, p->ai_addr, p->ai_addrlen) < 0) {
+            fprintf(stderr, "aaaaaa");
             close(fd);
             continue;
         }
@@ -188,6 +197,7 @@ int get_listener_sock(){
     freeaddrinfo(ai);
 
     if(p == NULL){
+        fprintf(stderr, "returnin -1");
         return -1;
     }
 
@@ -200,7 +210,9 @@ int get_listener_sock(){
 // Creates and binds a socket, then waits for the first packet to open a file and start writing data to it.
 // On last packet, write the data and close the file descriptor
 int main(int argc, char *argv[])
-{
+{\
+       
+
     char buffer[MAXLINE];
     int sockfd;
     struct sockaddr_in servaddr, cliaddr;
@@ -211,99 +223,146 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
+// Get a port
+    FILE *fp;
+    char path[1000];
+    int port;
+
+    /* Open the command for reading. */
+    fp = popen("netstat -lnt", "r");
+    if (fp == NULL) {
+        printf("Failed to run command\n" );
+        exit(1);
+    }
+
+    /* Read the output and get the first line that starts with tcp for IPv4 */
+    while (fgets(path, sizeof(path), fp) != NULL)
+    {
+        if (!strncmp(path, "tcp ", 4))
+        {
+            char *localhost = "127.0.0.1:";
+            char *start = strstr(path, "127.0.0.1:");
+            if (start == NULL)
+            {
+                continue;
+            }
+
+            char *end = strstr(start, " ");
+
+            int port_numlen = end - start - strlen(localhost);
+            char *port_str = malloc(port_numlen);
+            strncpy(port_str, start + strlen(localhost), port_numlen);
+            port = atoi(port_str);
+            
+            break;
+        }
+    }
+
+     /* close */
+    pclose(fp);
+
+    fprintf(stderr, "Using port number %d\n", port);
+
     
-    // int bind_failed = 1;
-    // while(bind_failed){
+     int bind_failed = 1;
+    while(bind_failed){
         
 
-    //     // Creating socket file descriptor
-    //     if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
-    //     {
-    //         perror("socket creation failed");
-    //         exit(EXIT_FAILURE);
-    //     }
+    // Creating socket file descriptor
+    if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+    {
+       perror("socket creation failed");
+             exit(EXIT_FAILURE);
+         }
 
-    //     // Set to non-blocking
-    //     fcntl(sockfd, F_SETFL, O_NONBLOCK);
+         // Set to non-blocking
+         //fcntl(sockfd, F_SETFL, O_NONBLOCK);
 
-    //     memset(&servaddr, 0, sizeof(servaddr));
-    //     memset(&cliaddr, 0, sizeof(cliaddr));
+       memset(&servaddr, 0, sizeof(servaddr));
+         memset(&cliaddr, 0, sizeof(cliaddr));
 
-    //     // get IP address of local machine
-    //     char hostbuffer[256];
-    //     gethostname(hostbuffer, sizeof(hostbuffer));
-    //     char *IPbuffer;
-    //     struct hostent *host_entry;
-    //     host_entry = gethostbyname(hostbuffer);
-    //     IPbuffer = inet_ntoa(*((struct in_addr *)host_entry->h_addr_list[0]));
-    //     if (IPbuffer == NULL)
-    //     {
-    //         printf("Couldn't get IP of local machine");
-    //         exit(1);
-    //     }
+         // get IP address of local machine
+        char hostbuffer[256];
+         gethostname(hostbuffer, sizeof(hostbuffer));
+        char *IPbuffer;
+         struct hostent *host_entry;
+         host_entry = gethostbyname(hostbuffer);
+         IPbuffer = inet_ntoa(*((struct in_addr *)host_entry->h_addr_list[0]));
+         if (IPbuffer == NULL)
+         {
+             printf("Couldn't get IP of local machine");
+             exit(1);
+         }
 
-    //     // Filling server information
-    //     servaddr.sin_family = AF_INET; // IPv4
-    //     servaddr.sin_addr.s_addr = inet_addr(IPbuffer);
-    //     servaddr.sin_port = htons(port);
+         // Filling server information
+         servaddr.sin_family = AF_INET; // IPv4
+         servaddr.sin_addr.s_addr = inet_addr(IPbuffer);
+         servaddr.sin_port = htons(45633);
 
-    //     // Bind the socket with the server address
-    //     if (bind(sockfd, (const struct sockaddr *)&servaddr,
-    //             sizeof(servaddr)) < 0)
-    //     {
-    //         perror("bind failed");
-    //         fprintf(stderr, "\nTrying again...");
-    //         bind_failed = 1;
-    //         // exit(EXIT_FAILURE);
-    //     }
-    //     bind_failed = 0;
-    // }
+         // Bind the socket with the server address
+         if (bind(sockfd, (const struct sockaddr *)&servaddr,
+                 sizeof(servaddr)) < 0)
+         {
+             perror("bind failed");
+             fprintf(stderr, "\nTrying again...");
+             bind_failed = 1;
+             // exit(EXIT_FAILURE);
+         }
+         fprintf(stderr, "port num %d", 45633);
+         bind_failed = 0;
+    }
 
     int len = sizeof(cliaddr);
     Message msg;
     struct m_data m_msg;
     // Constantly listen on this socket
-    sockfd = get_listener_sock();
-    if(sockfd == -1){
-        fprintf(stderr, "error getting listening socket");
-        exit(1);
-    }
+    listen(sockfd, 100);
     
     int new_fd;
     struct pollfd pfds[NUMTOTALCLIENTS+1];
-    pfds[0].fd = sockfd;
-    pfds[0].events = POLLIN;
 
     while (1)
     {   
-        memset(pfds, 0, NUMTOTALCLIENTS+1);
+        memset(pfds, 0, sizeof(pfds));
+        for (int i = 0; i < NUMTOTALCLIENTS+1; i++) {
+            pfds[i].fd = 0;
+            pfds[i].events = POLLIN;
+            pfds[i].revents = 0;
+        }
         pfds[0].fd = sockfd;
         pfds[0].events = POLLIN;
 
         struct client_node* head = head_cli;
-        int active[NUMTOTALCLIENTS];
+        int active[NUMTOTALCLIENTS] = {0};
         int itr = 0;
         while(head){
+
             active[itr] = head->fd;
             head = head->next; 
             itr++;
         }
+        
         int active_len = sizeof(active) / sizeof(active[0]);
-        for (int i = 0; i < active_len; i++) {
+        for (int i = 0; i < itr; i++) {
+
             pfds[i+1].fd = active[i];
             pfds[i+1].events = POLLIN;
         }
 
-       int num_events = poll(pfds, NUMTOTALCLIENTS+1, -1);
+       int num_events = poll(pfds, itr+1, -1);
+
        if(num_events == -1){
            perror("poll");
            exit(1);
        }
 
         // Run through the existing connections looking for data to read
-        for(int i = 0; i < NUMTOTALCLIENTS+1; i++) {
-
+        for(int i = 0; i < itr+1; i++) {
+            if (pfds[i].revents & POLLNVAL) {
+                exit(1);
+            }
             if (pfds[i].revents & POLLIN) {
+
                 if (pfds[i].fd == sockfd) {
                     // Handling new connection
                     // Get the new connection and new fd!
@@ -312,7 +371,10 @@ int main(int argc, char *argv[])
                     if(new_fd == -1){
                         perror("accept");
                     }
-                    recv(new_fd, (char *)buffer, MAXLINE, 0);
+
+                    int recv_size = recv(new_fd, (char *)buffer, MAXLINE, 0);
+
+
 
                     // Process the packet
                     msg = parsemsg(buffer);
@@ -326,14 +388,18 @@ int main(int argc, char *argv[])
 
                     on_login(m_msg,new_fd, (struct sockaddr *)&cliaddr);
                 }else{
-                    // regular client
+
+
+                     // regular client
                     int sender_fd = pfds[i].fd;
                     int nbytes = recv(pfds[i].fd, (char *)buffer, MAXLINE, 0);
+
                     if (nbytes <= 0) {
                         // Got error or connection closed by client
                         if (nbytes == 0) {
+                            continue;
                         // Connection closed
-                        printf("pollserver: socket %d hung up\n", sender_fd);
+
                         } else {
                         perror("recv");
                         }
@@ -369,7 +435,7 @@ int main(int argc, char *argv[])
                                 break;
 
                             case NEW_SESS:
-                                fprintf(stderr, "on new sess");
+
                                 on_new_sess(m_msg, new_fd);
                                 break;
 
@@ -401,7 +467,7 @@ int main(int argc, char *argv[])
 
 void on_login(struct m_data msg, int fd, struct sockaddr *cli_addr)
 {
-    fprintf(stderr, "In login");
+
     // Check if ID exists
     int ID_exist = 0;
     for (int i = 0; i < NUMTOTALCLIENTS; i++)
@@ -445,8 +511,7 @@ void on_login(struct m_data msg, int fd, struct sockaddr *cli_addr)
     }
 
     // Check if already logged in
-    struct client_node *client = find_cli(msg.client_id, head_cli);
-
+    struct client_node *client = find_cli(msg.client_id, &head_cli);
     if (client != NULL)
     {
         // Send NACK
@@ -462,7 +527,7 @@ void on_login(struct m_data msg, int fd, struct sockaddr *cli_addr)
     }
 
     // Add to connected clients
-    insert_cli(msg.client_id, NULL, cli_addr, head_cli, fd);
+    insert_cli(msg.client_id, NULL, cli_addr, &head_cli, fd);
 
     // Send back Lo_ACK
     char pre_pkt_string[200];
@@ -471,16 +536,15 @@ void on_login(struct m_data msg, int fd, struct sockaddr *cli_addr)
             0,
             msg.client_id,
             "data");
-    fprintf(stderr, "About to send?");
     send(fd, pre_pkt_string, sizeof(pre_pkt_string), 0);
-    fprintf(stderr, "sent?");
+    fprintf(stderr, "sent");
 }
 
 void on_join(struct m_data msg, int fd)
 {
 
     // Check if session exists
-    struct session_node *client_session = find_sess(msg.client_data, head_sess);
+    struct session_node *client_session = find_sess(msg.client_data, &head_sess);
     if (client_session == NULL)
     {
         // Session does not exist
@@ -498,7 +562,7 @@ void on_join(struct m_data msg, int fd)
 
     // Check if have already joined a session
 
-    struct client_node *client = find_cli(msg.client_id, head_cli);
+    struct client_node *client = find_cli(msg.client_id, &head_cli);
     if (client->session_ID != NULL)
     {
         // Already joined a session
@@ -515,7 +579,7 @@ void on_join(struct m_data msg, int fd)
     }
 
     // Add client to conference session
-    insert_cli(msg.client_id, client_session->ID, NULL, client_session->head_c, fd);
+    insert_cli(msg.client_id, client_session->ID, NULL, &(client_session->head_c), fd);
 
     // Send JN_ACK
     char pre_pkt_string[200];
@@ -532,7 +596,7 @@ void on_new_sess(struct m_data msg, int fd)
     fprintf(stderr, "Creating new sess\n");
 
     // Check if already joined a session
-    struct client_node *client = find_cli(msg.client_id, head_cli);
+    struct client_node *client = find_cli(msg.client_id, &head_cli);
     if (client->session_ID != NULL)
     {
         // Already joined a session
@@ -549,7 +613,7 @@ void on_new_sess(struct m_data msg, int fd)
     }
 
     // Check if session already exists
-    struct session_node *client_session = find_sess(msg.client_data, head_sess);
+    struct session_node *client_session = find_sess(msg.client_data, &head_sess);
     if (client_session != NULL)
     {
         // Session already exists
@@ -566,28 +630,28 @@ void on_new_sess(struct m_data msg, int fd)
     }
 
     // Create new session
-    struct session_node *current = insert_sess(msg.client_data, head_sess);
+    struct session_node *current = insert_sess(msg.client_data, &head_sess);
     
-
+    fprintf(stderr, "inserting in create");
     // Join the session
-    insert_cli(msg.client_id, msg.client_data, NULL, current->head_c, fd);
-
-    // Send JN_ACK
+    insert_cli(msg.client_id, msg.client_data, NULL, &(current->head_c), fd);
+    // Send NS_ACK
     char pre_pkt_string[200];
     sprintf(pre_pkt_string, "%d:%d:%s:%s",
-            JN_ACK,
+            NS_ACK,
             sizeof(msg.client_data),
             msg.client_id,
             msg.client_data);
     send(fd, pre_pkt_string, sizeof(pre_pkt_string), 0);
+    fprintf(stderr, "Sent!\n");
 }
 
 void on_message(struct m_data msg, int fd)
 {
 
     // Get the client's session id
-    struct client_node *client = find_cli(msg.client_id, head_cli);
-    struct session_node *client_session = find_sess(client->session_ID, head_sess);
+    struct client_node *client = find_cli(msg.client_id, &head_cli);
+    struct session_node *client_session = find_sess(client->session_ID, &head_sess);
 
     client = client_session->head_c;
 
@@ -660,7 +724,7 @@ void on_query(char *ID, int fd)
         }
         head_s = head_s->next;
     }
-
+    fprintf(stderr, "%s", data);
     sprintf(pre_pkt_string, "%d:%d:%s:%s",
             QU_ACK,
             strlen(data),
@@ -673,11 +737,11 @@ void on_query(char *ID, int fd)
 void on_leave_sess(char *ID)
 {
     // If the client is in a session, remove them
-    struct client_node *client = find_cli(ID, head_cli);
-    struct session_node *client_session = find_sess(client->session_ID, head_sess);
+    struct client_node *client = find_cli(ID, &head_cli);
+    struct session_node *client_session = find_sess(client->session_ID, &head_sess);
     if (client_session != NULL)
     {
-        struct client_node *client = delete_cli(ID, client_session->head_c);
+        struct client_node *client = delete_cli(ID, &(client_session->head_c));
         free(client);
     }
 
@@ -685,7 +749,7 @@ void on_leave_sess(char *ID)
     if (client_session == NULL)
     {
         // Remove from the session list
-        delete_sess(client_session->ID, head_sess);
+        delete_sess(client_session->ID, &head_sess);
         free(client_session);
     }
 }
@@ -694,14 +758,14 @@ void on_logout(char *ID)
 {
 
     // Remove the client from the connected list
-    struct client_node *client = delete_cli(ID, head_cli);
-    struct session_node *client_session = find_sess(client->session_ID, head_sess);
+    struct client_node *client = delete_cli(ID, &head_cli);
+    struct session_node *client_session = find_sess(client->session_ID, &head_sess);
     free(client);
 
     // If the client is in a session, remove them
     if (client_session != NULL)
     {
-        struct client_node *client = delete_cli(ID, client_session->head_c);
+        struct client_node *client = delete_cli(ID, &(client_session->head_c));
         free(client);
     }
 
@@ -709,7 +773,8 @@ void on_logout(char *ID)
     if (client_session == NULL)
     {
         // Remove from the session list
-        delete_sess(client_session->ID, head_sess);
+        delete_sess(client_session->ID, &head_sess);
         free(client_session);
     }
 }
+
