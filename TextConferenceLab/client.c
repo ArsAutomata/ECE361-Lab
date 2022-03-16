@@ -12,19 +12,21 @@
 #include <errno.h>
 #include <poll.h>
 #include "message.h"
+#include <netdb.h>
+
 #define COMMAND_LEN 100
-#define BUFFFER_SIZE 1200
+#define BUFFER_SIZE 1200
 bool logged_in;
 bool in_session;
 
 // socket
-int sockfd=-1;
+int sockfd = -1;
 int num_bytes;
 socklen_t servaddr_len;
 struct sockaddr_in servaddr;
 
 // buffer
-char buffer[BUFFFER_SIZE];
+char buffer[BUFFER_SIZE];
 
 // client source
 char client_id[COMMAND_LEN];
@@ -40,8 +42,9 @@ void clear_buffer()
 
 bool send_buffer()
 {
+	num_bytes = send(sockfd, buffer, sizeof(buffer), 0);
 
-	if ((num_bytes = send(sockfd, buffer, BUFFFER_SIZE - 1, 0)) != -1)
+	if (num_bytes != -1)
 	{
 		return true;
 	}
@@ -63,32 +66,31 @@ void login(char *client_id, char *password, char *server_ip, char *server_port)
 		return;
 	}
 
-	struct sockaddr_in servaddr, cliaddr;
+	struct addrinfo hints;
+	struct addrinfo *server_info, *server_pointer;
+	int return_value; 
+	memset(&hints, 0, sizeof(hints));
+	hints.ai_family = AF_UNSPEC;
+	hints.ai_socktype = SOCK_STREAM; 
 
-	int port = atoi(server_port);
-	// Creating socket file descriptor
-	if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
-	{
-		perror("socket creation failed");
-		exit(1);
+	if(return_value = getaddrinfo(server_ip, server_port, &hints, &server_info) != 0){
+		fprintf(stderr, "getaddrinfo error: %d\n", return_value);
 	}
 
-
-	memset(&servaddr, 0, sizeof(servaddr));
-	memset(&cliaddr, 0, sizeof(cliaddr));
-
-	// Filling server information
-	servaddr.sin_family = AF_INET; // IPv4
-	servaddr.sin_addr.s_addr = inet_addr(server_ip);
-	servaddr.sin_port = htons(port);
-	// connect on client side
-	if (connect(sockfd, (const struct sockaddr *)&servaddr, sizeof(servaddr)) == -1)
-	{
-		logged_in = false;
-		perror("could not connect to server");
-		return;
+	for(server_pointer = server_info; server_pointer != NULL; server_pointer->ai_next){
+		if((sockfd = socket(server_pointer->ai_family, server_pointer->ai_socktype, server_pointer->ai_protocol)) == -1){
+			printf("socket connected");
+			continue; 
+		}
+		if(connect(sockfd, server_pointer->ai_addr, server_pointer->ai_addrlen) == -1){
+			close(sockfd);
+			printf("client connected");
+			continue;
+		}else{
+			break;
+		}
 	}
-
+	
 	Message login_mes;
 	login_mes.type = LOGIN;
 	strcpy(login_mes.source, client_id);
@@ -97,30 +99,29 @@ void login(char *client_id, char *password, char *server_ip, char *server_port)
 	strcpy(buffer, serialize(login_mes));
 	if (!send_buffer())
 	{
-		fprintf(stderr,"Couldn't send login info\n");
+		fprintf(stderr, "Couldn't send login info\n");
 		return;
 	}
-	
 
-	int num_bytes = recv(sockfd, buffer, BUFFFER_SIZE - 1, 0);
+	int num_bytes = recv(sockfd, buffer, BUFFER_SIZE - 1, 0);
 	if (num_bytes == -1)
 	{
 		fprintf(stderr, "Failed to receive");
 		close(sockfd);
 		return;
 	}
-	
+
 	Message *response = deserialize(buffer);
 	clear_buffer();
 	if (response->type == LO_ACK)
 	{
-		fprintf(stderr,"Logged in successfully!\n");
+		fprintf(stderr, "Logged in successfully!\n");
 		logged_in = true;
 		return;
 	}
 	else if (response->type == LO_NAK)
 	{
-		fprintf(stderr,"Login failed: %s\n", response->data);
+		fprintf(stderr, "Login failed: %s\n", response->data);
 		close(sockfd);
 		return;
 	}
@@ -164,7 +165,7 @@ void joinsession(char *session_id)
 	send_buffer();
 
 	// check the type of ACK (JN_ACK or JN_NAK) for join and handle appropriately
-	if ((num_bytes = recv(sockfd, buffer, BUFFFER_SIZE - 1, 0)) == -1)
+	if ((num_bytes = recv(sockfd, buffer, BUFFER_SIZE - 1, 0)) == -1)
 	{
 		printf("failed recieve");
 		close(sockfd);
@@ -206,7 +207,7 @@ void createsession(char *session_id)
 
 	// recieve data, print sucess on NS_ACK, print error data on NS_NAK
 	int num_bytes;
-	if ((num_bytes = recv(sockfd, buffer, BUFFFER_SIZE - 1, 0)) == -1)
+	if ((num_bytes = recv(sockfd, buffer, BUFFER_SIZE - 1, 0)) == -1)
 	{
 		printf("failed recieve");
 		close(sockfd);
@@ -305,7 +306,7 @@ void list()
 
 	// TODO: call recv to get the QU_ACK
 	//  print out the user list and their sessions
-	if ((num_bytes = recv(sockfd, buffer, BUFFFER_SIZE - 1, 0)) == -1)
+	if ((num_bytes = recv(sockfd, buffer, BUFFER_SIZE - 1, 0)) == -1)
 	{
 		printf("failed recieve");
 		close(sockfd);
@@ -366,20 +367,19 @@ int main()
 
 	while (1)
 	{
-		
+
 		FD_ZERO(&socketset);
 		FD_SET(fileno(stdin), &socketset);
 
-		
 		if (sockfd > 0)
 		{
-			fprintf(stderr,"Might segfault");
+			fprintf(stderr, "Might segfault");
 			FD_SET(sockfd, &socketset);
 			select(sockfd + 1, &socketset, NULL, NULL, NULL);
 		}
 		else
 		{
-			
+
 			select(fileno(stdin) + 1, &socketset, NULL, NULL, NULL);
 		}
 
@@ -387,7 +387,7 @@ int main()
 		if (logged_in && FD_ISSET(sockfd, &socketset) && in_session)
 		{
 			char buf[MAX_DATA];
-			recv(sockfd, buffer, BUFFFER_SIZE - 1, 0);
+			recv(sockfd, buffer, BUFFER_SIZE - 1, 0);
 			Message *response = deserialize(buffer);
 			clear_buffer();
 			if (response->type == MESSAGE)
@@ -398,7 +398,6 @@ int main()
 		else if (FD_ISSET(fileno(stdin), &socketset))
 		{
 			scanf("%s", cmd);
-
 
 			if (strcmp(cmd, "/login") == 0)
 			{
