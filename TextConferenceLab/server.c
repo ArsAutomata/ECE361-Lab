@@ -140,9 +140,8 @@ int main(int argc, char *argv[])
 
     /* Open the command for reading. */
     fp = popen("netstat -lnt", "r");
-    if (fp == NULL)
-    {
-        printf("Failed to run command\n");
+    if (fp == NULL) {
+        printf("Failed to run command\n" );
         exit(1);
     }
 

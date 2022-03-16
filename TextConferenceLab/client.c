@@ -66,7 +66,7 @@ void login(char *client_id, char *password, char *server_ip, char *server_port)
 	struct sockaddr_in servaddr, cliaddr;
 
 	int port = atoi(server_port);
-
+	fprintf(stderr,"Creating the socket");
 	// Creating socket file descriptor
 	if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
 	{
@@ -82,14 +82,17 @@ void login(char *client_id, char *password, char *server_ip, char *server_port)
 	servaddr.sin_family = AF_INET; // IPv4
 	servaddr.sin_addr.s_addr = inet_addr(server_ip);
 	servaddr.sin_port = htons(port);
-
+	fprintf(stderr,"About to connect");
+	fprintf(stderr, "this is %s %d", server_ip, port);
 	// connect on client side
 	if (connect(sockfd, (const struct sockaddr *)&servaddr, sizeof(servaddr)) == -1)
 	{
 		logged_in = false;
+		fprintf(stderr, "this is %s %d", server_ip, port);
 		perror("could not connect to server");
 		return;
 	}
+	fprintf(stderr,"COnnected!");
 
 	Message login_mes;
 	login_mes.type = LOGIN;
@@ -374,25 +377,32 @@ int main()
 
 	while (1)
 	{
+		fprintf(stderr,"Starting 1");
 		FD_ZERO(&socketset);
 		FD_SET(fileno(stdin), &socketset);
 
+		fprintf(stderr,"Starting 2");
 		if (sockfd > 0)
 		{
+			fprintf(stderr,"Starting 2.a");
 			FD_SET(sockfd, &socketset);
+			fprintf(stderr,"Here?");
 			select(sockfd + 1, &socketset, NULL, NULL, NULL);
+			fprintf(stderr,"Starting here?");
 		}
 		else
 		{
+			fprintf(stderr,"Starting 2.b");
 			select(fileno(stdin) + 1, &socketset, NULL, NULL, NULL);
 		}
+		fprintf(stderr,"Starting 3");
 
 		// Receive message
 		if (logged_in && FD_ISSET(sockfd, &socketset) && in_session)
 		{
 			char buf[MAX_DATA];
 			recv(sockfd, buffer, BUFFFER_SIZE - 1, 0);
-
+			printf("peepeepoopoo %s", buffer);
 			Message *response = deserialize(buffer);
 			clear_buffer();
 			if (response->type == MESSAGE)
@@ -405,6 +415,7 @@ int main()
 
 			scanf("%s", cmd);
 
+
 			if (strcmp(cmd, "/login") == 0)
 			{
 				if (logged_in)
@@ -413,6 +424,11 @@ int main()
 				}
 				else
 				{
+					fprintf(stderr,"Getting login things");
+					scanf("%s", client_id);
+					scanf("%s", password);
+					scanf("%s", server_ip);
+					scanf("%s", server_port);
 					login(client_id, password, server_ip, server_port);
 				}
 			}
