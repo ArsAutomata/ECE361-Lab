@@ -13,6 +13,7 @@
 #include <sys/fcntl.h>
 #include <errno.h>
 #include <poll.h>
+#include <signal.h>
 
 #define MAXLINE 1250
 #define NUMTOTALCLIENTS 6
@@ -34,6 +35,7 @@ void on_message(Message msg, int fd);
 void on_query(char *ID, int fd);
 void on_leave_sess(char *ID);
 void on_logout(char *ID);
+void sigint_handler(int sig_num);
 
 
 // parse the packet string
@@ -206,6 +208,7 @@ int get_listener_sock(){
 int main(int argc, char *argv[])
 {
        
+    signal(SIGINT, sigint_handler);
 
     char buffer[MAXLINE];
     int sockfd;
@@ -442,6 +445,28 @@ int main(int argc, char *argv[])
     return 0;
 }
 
+/* Signal Handler for SIGINT */
+void sigint_handler(int sig_num)
+{
+    // Logout all users
+	struct client_node* head = head_cli;
+    while(head){
+        // Send message packet
+        char pre_pkt_string[200];
+        sprintf(pre_pkt_string, "%d:%d:%s:%s",
+                SERVER_CLOSED,
+                strlen("len"),
+                "Server",
+                "len");
+        send(head->fd, pre_pkt_string, sizeof(pre_pkt_string), 0);
+        // Next client
+        head = head->next;
+    }
+    fprintf(stderr, "Server closed\n");
+	exit(0);
+}
+
+
 void on_login(Message msg, int fd, struct sockaddr *cli_addr)
 {
 
@@ -545,7 +570,7 @@ void on_join(Message msg, int fd)
         // Already joined a session
         // Send JN_NAK
         char pre_pkt_string[200];
-        char *data = "%s:You have already joined a session";
+        char *data = "You have already joined a session";
         sprintf(pre_pkt_string, "%d:%d:%s:%s",
                 JN_NAK,
                 strlen(data),
@@ -579,7 +604,7 @@ void on_new_sess(Message msg, int fd)
         // Already joined a session
         // Send NS_NAK
         char pre_pkt_string[200];
-        char *data = "%s:Please leave your current session to create a new one";
+        char *data = "Please leave your current session to create a new one";
         sprintf(pre_pkt_string, "%d:%d:%s:%s",
                 NS_NAK,
                 strlen(data),
@@ -596,7 +621,7 @@ void on_new_sess(Message msg, int fd)
         // Session already exists
         // Send NS_NAK
         char pre_pkt_string[200];
-        char *data = "%s:The session already exists";
+        char *data = "The session already exists";
         sprintf(pre_pkt_string, "%d:%d:%s:%s",
                 NS_NAK,
                 strlen(data),
@@ -661,6 +686,7 @@ void on_query(char *ID, int fd)
     // Example:
     // "john:peter:session:lab_help:jack:jill:class_help:josh"
 
+
     char pre_pkt_string[1000];
     char *data = (char *) malloc(500);
 
@@ -671,7 +697,7 @@ void on_query(char *ID, int fd)
         if (head->session_ID == NULL)
         {
             strcat(data, head->ID);
-            if (head_sess != NULL && head->next != NULL) strcat(data, "-");
+            if (head_sess != NULL || head->next != NULL) strcat(data, "-");
         }
         head = head->next;
     }
@@ -691,14 +717,14 @@ void on_query(char *ID, int fd)
         }
         head_s = head_s->next;
     }
+
     sprintf(pre_pkt_string, "%d:%d:%s:%s",
             QU_ACK,
             strlen(data),
             ID,
             data);
     if(send(fd, pre_pkt_string, sizeof(pre_pkt_string), 0) == -1)
-    
-    // fprintf(stderr, "Send for list failed %s\n", pre_pkt_string);
+        fprintf(stderr, "Send for list failed %s\n", pre_pkt_string);
 	
     return;
 }

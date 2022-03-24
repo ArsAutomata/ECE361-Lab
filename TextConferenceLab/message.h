@@ -48,7 +48,8 @@ enum TYPES
 	ADM_KICK,
 	ADM_TRAN,
 	ADM_ACK,
-	ADM_NAK
+	ADM_NAK,
+	SERVER_CLOSED
 };
 
 typedef struct message
@@ -74,7 +75,6 @@ Message *deserialize(char *string)
 	size = strtok(NULL, ":");
 	source = strtok(NULL, ":");
 	data = strtok(NULL, ":");
-
 	// exception handle
 	if (typevar == NULL) {fprintf(stderr, "\nException! type\n");
 		return NULL;}
