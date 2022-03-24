@@ -17,7 +17,6 @@
 #define COMMAND_LEN 100
 #define BUFFER_SIZE 1000
 
-
 // status
 bool logged_in = false;
 bool in_session = false;
@@ -47,19 +46,17 @@ bool send_buffer()
 {
 	num_bytes = send(sockfd, buffer, sizeof(buffer), 0);
 
-	if (num_bytes >=0)
-	{	
+	if (num_bytes >= 0)
+	{
 
 		return true;
 	}
 	else
 	{
 		printf("Could not send.\n");
-        clear_buffer();
+		clear_buffer();
 		return false;
 	}
-
-	
 }
 
 void login(char *client_id, char *password, char *server_ip, char *server_port)
@@ -74,29 +71,35 @@ void login(char *client_id, char *password, char *server_ip, char *server_port)
 
 	struct addrinfo hints;
 	struct addrinfo *server_info, *server_pointer;
-	int return_value; 
+	int return_value;
 	memset(&hints, 0, sizeof(hints));
 	hints.ai_family = AF_UNSPEC;
-	hints.ai_socktype = SOCK_STREAM; 
+	hints.ai_socktype = SOCK_STREAM;
 
-	if(return_value = getaddrinfo(server_ip, server_port, &hints, &server_info) != 0){
+	if (return_value = getaddrinfo(server_ip, server_port, &hints, &server_info) != 0)
+	{
 		fprintf(stderr, "getaddrinfo error: %d\n", return_value);
 	}
 
-	for(server_pointer = server_info; server_pointer != NULL; server_pointer->ai_next){
-		if((sockfd = socket(server_pointer->ai_family, server_pointer->ai_socktype, server_pointer->ai_protocol)) == -1){
+	for (server_pointer = server_info; server_pointer != NULL; server_pointer->ai_next)
+	{
+		if ((sockfd = socket(server_pointer->ai_family, server_pointer->ai_socktype, server_pointer->ai_protocol)) == -1)
+		{
 			printf("socket connected");
-			continue; 
+			continue;
 		}
-		if(connect(sockfd, server_pointer->ai_addr, server_pointer->ai_addrlen) == -1){
+		if (connect(sockfd, server_pointer->ai_addr, server_pointer->ai_addrlen) == -1)
+		{
 			close(sockfd);
 			printf("client connected");
 			continue;
-		}else{
+		}
+		else
+		{
 			break;
 		}
 	}
-	
+
 	Message login_mes;
 	login_mes.type = LOGIN;
 	strcpy(login_mes.source, client_id);
@@ -104,7 +107,7 @@ void login(char *client_id, char *password, char *server_ip, char *server_port)
 	login_mes.size = strlen(password);
 	strcpy(buffer, serialize(login_mes));
 
-    printf("%s\n", buffer);
+	printf("%s\n", buffer);
 	if (!send_buffer())
 	{
 		fprintf(stderr, "Couldn't send login info\n");
@@ -118,14 +121,14 @@ void login(char *client_id, char *password, char *server_ip, char *server_port)
 		close(sockfd);
 		return;
 	}
-    printf("%s\n", buffer);
+	printf("%s\n", buffer);
 	Message *response = deserialize(buffer);
 	clear_buffer();
 	if (response->type == LO_ACK)
 	{
 		fprintf(stderr, "Logged in successfully!\n");
 		logged_in = true;
-        fprintf(stderr, "login = %d\n", logged_in);
+		fprintf(stderr, "login = %d\n", logged_in);
 		return;
 	}
 	else if (response->type == LO_NAK)
@@ -151,15 +154,15 @@ void logout()
 	char *mes_string = serialize(logout_mes);
 
 	strcpy(buffer, mes_string);
-    printf("buffer: %s\n", buffer);
-    send_buffer();
-    printf("buffer: %s\n", buffer);
+	printf("buffer: %s\n", buffer);
+	send_buffer();
+	printf("buffer: %s\n", buffer);
 
 	close(sockfd);
-    printf("socket closed\n");
+	printf("socket closed\n");
 	logged_in = false;
-    printf("login = %d\n", logged_in); 
-    return;
+	printf("login = %d\n", logged_in);
+	return;
 }
 
 void joinsession(char *session_id)
@@ -216,13 +219,13 @@ void createsession(char *session_id)
 
 	char *create_string = serialize(create_mes);
 	strcpy(buffer, create_string);
-	
+
 	if (!send_buffer())
 	{
-		fprintf(stderr,"Couldn't send create info\n");
+		fprintf(stderr, "Couldn't send create info\n");
 		return;
 	}
-	
+
 	int num_bytes = recv(sockfd, buffer, BUFFER_SIZE - 1, 0);
 	if (num_bytes == -1)
 	{
@@ -230,7 +233,6 @@ void createsession(char *session_id)
 		close(sockfd);
 		return;
 	}
-
 
 	Message *response = deserialize(buffer);
 	clear_buffer();
@@ -319,9 +321,9 @@ void list()
 
 	char *list_string = serialize(list_mes);
 	strcpy(buffer, list_string);
-    
+
 	send_buffer();
-    
+
 	// TODO: call recv to get the QU_ACK
 	//  print out the user list and their sessions
 	if ((num_bytes = recv(sockfd, buffer, BUFFER_SIZE - 1, 0)) == -1)
@@ -362,6 +364,91 @@ void send_text(char *text)
 
 	send_buffer();
 	return;
+}
+
+void transferuser(char *kick_id)
+{
+	// check for possible errors
+	Message kick_mes;
+	kick_mes.type = ADM_KICK;
+	strcpy(kick_mes.source, client_id);
+	strcpy(kick_mes.data, kick_id);
+	kick_mes.size = strlen(kick_id);
+	strcpy(buffer, serialize(kick_mes));
+
+	printf("%s\n", buffer);
+	if (!send_buffer())
+	{
+		fprintf(stderr, "Couldn't send kick info\n");
+		return;
+	}
+
+	int num_bytes = recv(sockfd, buffer, BUFFER_SIZE - 1, 0);
+	if (num_bytes == -1)
+	{
+		fprintf(stderr, "Failed to receive");
+		return;
+	}
+
+	Message *response = deserialize(buffer);
+	clear_buffer();
+	if (response->type == ADM_ACK)
+	{
+		fprintf(stderr, "Client %s was kicked!\n", kick_id);
+		return;
+	}
+	else if (response->type == ADM_NAK)
+	{
+		fprintf(stderr, "%s", response->data);
+		return;
+	}
+	else
+	{
+		fprintf(stderr, "very big wrong ahhh!");
+	}
+}
+
+
+void kickuser(char *tran_id)
+{
+	// check for possible errors
+	Message tran_mes;
+	tran_mes.type = ADM_KICK;
+	strcpy(tran_mes.source, client_id);
+	strcpy(tran_mes.data, tran_id);
+	tran_mes.size = strlen(tran_id);
+	strcpy(buffer, serialize(tran_mes));
+
+	printf("%s\n", buffer);
+	if (!send_buffer())
+	{
+		fprintf(stderr, "Couldn't send transfer info\n");
+		return;
+	}
+
+	int num_bytes = recv(sockfd, buffer, BUFFER_SIZE - 1, 0);
+	if (num_bytes == -1)
+	{
+		fprintf(stderr, "Failed to receive");
+		return;
+	}
+
+	Message *response = deserialize(buffer);
+	clear_buffer();
+	if (response->type == ADM_ACK)
+	{
+		fprintf(stderr, "Client %s is now the admin!\n", tran_id);
+		return;
+	}
+	else if (response->type == ADM_NAK)
+	{
+		fprintf(stderr, "%s", response->data);
+		return;
+	}
+	else
+	{
+		fprintf(stderr, "very big wrong ahhh!");
+	}
 }
 
 int main()
@@ -421,8 +508,8 @@ int main()
 			scanf("%s", cmd);
 
 			if (strcmp(cmd, "/login") == 0)
-			{   
-                fprintf(stderr, "scannig?");
+			{
+				fprintf(stderr, "scannig?");
 				if (logged_in)
 				{
 					char *garb;
@@ -433,7 +520,7 @@ int main()
 					printf("already logged in\n");
 				}
 				else
-				{   
+				{
 					scanf("%s", client_id);
 					scanf("%s", password);
 					scanf("%s", server_ip);
@@ -491,7 +578,7 @@ int main()
 					printf("please log in first\n");
 				}
 				else
-				{	
+				{
 					fprintf(stderr, "about to create\n\n");
 					createsession(session_id);
 				}
@@ -507,13 +594,29 @@ int main()
 					list();
 				}
 			}
+			else if (strcmp(cmd, "/transfer") == 0)
+			{
+				scanf("%s", client_id);
+				if (!logged_in)
+				{
+					printf("please log in first\n");
+				}
+				else if (!in_session)
+				{
+					printf("please create a session first\n");
+				}
+				else
+				{
+					transferuser(client_id);
+				}
+			}
 			else if (strcmp(cmd, "/quit") == 0)
 			{
 				if (logged_in)
 				{
 					logout();
 				}
-				 return 0;
+				return 0;
 			}
 			else
 			{
@@ -528,10 +631,14 @@ int main()
 						fgets(totaltext + cmdlen, MAX_DATA - cmdlen, stdin);
 						printf("sending message: %s", totaltext);
 						send_text(totaltext);
-					}else{
+					}
+					else
+					{
 						fprintf(stderr, "You are not currently in a session\n");
 					}
-				}else{
+				}
+				else
+				{
 					fprintf(stderr, "Please log in first\n");
 				}
 			}

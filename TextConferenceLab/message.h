@@ -44,7 +44,11 @@ enum TYPES
 	NS_NAK,
 	MESSAGE,
 	QUERY,
-	QU_ACK
+	QU_ACK,
+	ADM_KICK,
+	ADM_TRAN,
+	ADM_ACK,
+	ADM_NAK
 };
 
 typedef struct message
