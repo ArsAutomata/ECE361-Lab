@@ -646,6 +646,11 @@ void on_new_sess(struct m_data msg, int fd)
     // Join the session
     insert_cli(msg.client_id, msg.client_data, client->cli_addr, &(current->head_c), fd);
 
+    //changing the admin of the new session
+    head_sess->admin = msg.client_id;
+    if(head_sess){
+        fprintf(stderr, "the admin of this session is %s\n", head_sess->admin);
+    }
     if(current->head_c){
         fprintf(stderr, "Inserting client worked, name is %s\n", current->head_c->ID);
     }else{
