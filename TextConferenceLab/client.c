@@ -48,15 +48,16 @@ bool send_buffer()
 
 	if (num_bytes >= 0)
 	{
-
+		clear_buffer();
 		return true;
 	}
 	else
 	{
-		printf("Could not send.\n");
+		fprintf(stderr, "Could not send.\n");
 		clear_buffer();
 		return false;
 	}
+	
 }
 
 void login(char *client_id, char *password, char *server_ip, char *server_port)
@@ -91,7 +92,7 @@ void login(char *client_id, char *password, char *server_ip, char *server_port)
 		if (connect(sockfd, server_pointer->ai_addr, server_pointer->ai_addrlen) == -1)
 		{
 			close(sockfd);
-			printf("client connected");
+			printf("client not connected");
 			continue;
 		}
 		else
@@ -104,10 +105,9 @@ void login(char *client_id, char *password, char *server_ip, char *server_port)
 	login_mes.type = LOGIN;
 	strcpy(login_mes.source, client_id);
 	strcpy(login_mes.data, password);
+	
 	login_mes.size = strlen(password);
 	strcpy(buffer, serialize(login_mes));
-
-	printf("%s\n", buffer);
 	if (!send_buffer())
 	{
 		fprintf(stderr, "Couldn't send login info\n");
@@ -121,14 +121,13 @@ void login(char *client_id, char *password, char *server_ip, char *server_port)
 		close(sockfd);
 		return;
 	}
-	printf("%s\n", buffer);
+    
 	Message *response = deserialize(buffer);
 	clear_buffer();
 	if (response->type == LO_ACK)
 	{
 		fprintf(stderr, "Logged in successfully!\n");
 		logged_in = true;
-		fprintf(stderr, "login = %d\n", logged_in);
 		return;
 	}
 	else if (response->type == LO_NAK)
@@ -154,20 +153,16 @@ void logout()
 	char *mes_string = serialize(logout_mes);
 
 	strcpy(buffer, mes_string);
-	printf("buffer: %s\n", buffer);
 	send_buffer();
-	printf("buffer: %s\n", buffer);
 
 	close(sockfd);
-	printf("socket closed\n");
 	logged_in = false;
-	printf("login = %d\n", logged_in);
+	printf("You are no longer logged in\n");
 	return;
 }
 
 void joinsession(char *session_id)
 {
-	printf("joining: %s\n", session_id);
 
 	Message join_mes;
 	join_mes.type = JOIN;
@@ -177,8 +172,7 @@ void joinsession(char *session_id)
 
 	char *join_string = serialize(join_mes);
 	int num_bytes;
-	strcpy(join_string, buffer);
-
+	strcpy(buffer, join_string);
 	send_buffer();
 
 	// check the type of ACK (JN_ACK or JN_NAK) for join and handle appropriately
@@ -188,14 +182,14 @@ void joinsession(char *session_id)
 		close(sockfd);
 		return;
 	}
-
+	fprintf(stderr, "Buffer received %s %d\n", buffer, num_bytes);
 	Message *response = deserialize(buffer);
 	clear_buffer();
 
 	if (response->type == JN_ACK)
 	{
-		printf("joined session: %s\n", session_id);
-		logged_in = true;
+		fprintf(stderr, "Joined session %s successfully\n", session_id);
+		in_session = true;
 		return;
 	}
 	else if (response->type == JN_NAK)
@@ -209,7 +203,7 @@ void joinsession(char *session_id)
 void createsession(char *session_id)
 {
 
-	printf("creating session: %s \n", session_id);
+	printf("Creating session: %s \n", session_id);
 
 	Message create_mes;
 	create_mes.type = NEW_SESS;
@@ -238,7 +232,7 @@ void createsession(char *session_id)
 	clear_buffer();
 	if (response->type == NS_ACK)
 	{
-		fprintf(stderr, "session %s created\n", session_id);
+		fprintf(stderr, "Session %s created\n", session_id);
 		in_session = true;
 		return;
 	}
@@ -253,9 +247,6 @@ void createsession(char *session_id)
 		printf("very big wrong ahhh!");
 	}
 
-	// join the created session
-	joinsession(session_id);
-
 	return;
 }
 
@@ -268,8 +259,6 @@ void leavesession()
 		return;
 	}
 
-	printf("leaving session\n");
-
 	Message leave_mes;
 	leave_mes.type = LEAVE_SESS;
 	leave_mes.size = 0;
@@ -280,37 +269,46 @@ void leavesession()
 	int num_bytes;
 	strcpy(buffer, leave_string);
 
-	if (send_buffer() == true)
+	if (send_buffer())
 	{
+		printf("Leaving session\n");
 		in_session = false;
 		return;
 	}
-
-	return;
+	printf("Couldnt leave session; This shouldn't happen... Quitting\n");
+	exit(1);
 }
 
 void printlist(char *string)
 {
 	char s[MAX_DATA];
 	strcpy(s, string);
-	char *p = strtok(s, ":");
-	printf("no session\n");
+	char *p = strtok(s, "-");
+	printf("No session:\n", s);
+	int sess_name = 0;
 	while (p != NULL)
-	{
-		printf("%s\n", p);
+	{	
+		// Check if hitting a new session in the list
+		if (strcmp(p, "session") == 0) sess_name = 1;
 
-		p = strtok(NULL, ":");
+		// Currently on the session name
+		else if(sess_name){ printf("\nIn session %s\n",p); sess_name--;}
+
+		// On a name; Just print it
+		else printf("%s\n", p);
+		
+		p = strtok(NULL, "-");
 	}
 	return;
 }
 
 void list()
 {
-	if (!in_session)
-	{
-		fprintf(stderr, "You are not in a session.\n");
-		return;
-	}
+	// if (!in_session)
+	// {
+	// 	fprintf(stderr, "You are not in a session.\n");
+	// 	return;
+	// }
 
 	printf("printing list:\n");
 
@@ -323,28 +321,25 @@ void list()
 	strcpy(buffer, list_string);
 
 	send_buffer();
-
-	// TODO: call recv to get the QU_ACK
-	//  print out the user list and their sessions
+    
 	if ((num_bytes = recv(sockfd, buffer, BUFFER_SIZE - 1, 0)) == -1)
 	{
 		printf("failed recieve");
 		close(sockfd);
 		return;
 	}
-
+	fprintf(stderr, "hmm %s %d\n", buffer, num_bytes);
 	Message *response = deserialize(buffer);
 	clear_buffer();
 
 	if (response->type == QU_ACK)
 	{
-		printf("list recieved\n");
 		printlist(response->data);
 		return;
 	}
 	else
 	{
-		printf("error in recieveing list");
+		printf("Error in receiving list\n");
 		return;
 	}
 }
@@ -508,8 +503,7 @@ int main()
 			scanf("%s", cmd);
 
 			if (strcmp(cmd, "/login") == 0)
-			{
-				fprintf(stderr, "scannig?");
+			{   
 				if (logged_in)
 				{
 					char *garb;
@@ -517,7 +511,7 @@ int main()
 					scanf("%s", garb);
 					scanf("%s", garb);
 					scanf("%s", garb);
-					printf("already logged in\n");
+					printf("Already logged in\n");
 				}
 				else
 				{
@@ -579,7 +573,6 @@ int main()
 				}
 				else
 				{
-					fprintf(stderr, "about to create\n\n");
 					createsession(session_id);
 				}
 			}

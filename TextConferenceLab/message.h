@@ -76,9 +76,15 @@ Message *deserialize(char *string)
 	data = strtok(NULL, ":");
 
 	// exception handle
-	if (typevar == NULL || size == NULL || source == NULL || data == NULL)
+	if (typevar == NULL) {fprintf(stderr, "\nException! type\n");
+		return NULL;}
+	else if(size == NULL) {fprintf(stderr, "\nException! size\n");
+		return NULL;}
+	else if(source == NULL){fprintf(stderr, "\nException! source\n");
+		return NULL;}
+	else if(data == NULL)
 	{
-		fprintf(stderr, "\nException! this shouldn't happen\n");
+		fprintf(stderr, "\nException! data\n");
 		return NULL;
 	}
 

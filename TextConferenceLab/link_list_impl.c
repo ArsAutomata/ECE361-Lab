@@ -11,9 +11,15 @@ void insert_cli(char* ID, char* session_ID, struct sockaddr* cli_addr, struct cl
    //create a link
    struct client_node *link = (struct client_node*) malloc(sizeof(struct client_node));
 
-	
-   link->ID = ID;
-   link->session_ID = session_ID;
+   
+	link->ID = (char *) malloc(100);
+   link->session_ID = (char *) malloc(100);
+   strcpy(link->ID ,ID);
+   if(session_ID != NULL){
+      strcpy(link->session_ID ,session_ID);
+   }
+   else{ link->session_ID = NULL;}
+   
    link->fd = fd;
    if(cli_addr != NULL){
       link->cli_addr = cli_addr;
@@ -32,8 +38,8 @@ void insert_cli(char* ID, char* session_ID, struct sockaddr* cli_addr, struct cl
 struct session_node* insert_sess(char* ID, struct session_node** head_sess) {
    //create a link
    struct session_node *link = (struct session_node*) malloc(sizeof(struct session_node));
-	
-   link->ID = ID;
+	link->ID = (char *) malloc(100);
+   strcpy(link->ID ,ID);
    link->head_c = NULL;
 	
    //point it to old first node
@@ -54,10 +60,8 @@ struct client_node* find_cli(char *ID, struct client_node** head_c) {
    if(*head_c == NULL) {
       return NULL;
    }
-
    //navigate through list
    while(strcmp(current->ID,ID) != 0) {
-	
       //if it is last node
       if(current->next == NULL) {
          return NULL;
@@ -105,10 +109,10 @@ void delete_sess(char *ID, struct session_node** head_sess) {
    struct session_node* current = *head_sess;
    struct session_node* previous = NULL;
 	
-   //if list is empty
-   // if(head_sess == NULL) {
-   //    return NULL;
-   // }
+   // if list is empty
+   if(current == NULL) {
+      return;
+   }
 
    //navigate through list
    while(strcmp(current->ID,ID) != 0) {
@@ -164,11 +168,9 @@ struct client_node* delete_cli(char *ID, struct client_node** head_c) {
    if(current == *head_c) {
       //change first to point to next link
       *head_c = (*head_c)->next;
-      current->session_ID = NULL;
    } else {
       //bypass the current link
       previous->next = current->next;
-      current->session_ID = NULL;
    }    
    return current;
 }
