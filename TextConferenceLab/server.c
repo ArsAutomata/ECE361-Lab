@@ -607,12 +607,13 @@ void on_new_sess(Message msg, int fd)
     }
 
     // Create new session
-    struct session_node *current = insert_sess(msg.data, &head_sess);
+    struct session_node *current = insert_sess(msg.data, msg.source, &head_sess);
 
     
     // Join the session
     insert_cli(msg.source, msg.data, client->cli_addr, &(current->head_c), fd);
     client->session_ID = current->ID;
+
     // Send NS_ACK
     char pre_pkt_string[200];
     sprintf(pre_pkt_string, "%d:%d:%s:%s",
@@ -622,7 +623,7 @@ void on_new_sess(Message msg, int fd)
             msg.data);
     send(fd, pre_pkt_string, sizeof(pre_pkt_string), 0);
     fprintf(stderr, "Created session %s\n", msg.data);
-    fprintf(stderr,"User %s has joined session %s\n", msg.source, msg.data);
+    fprintf(stderr,"User %s is admin of session %s\n", current->admin, msg.data);
 }
 
 void on_message(Message msg, int fd)

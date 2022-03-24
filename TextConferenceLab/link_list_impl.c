@@ -35,11 +35,13 @@ void insert_cli(char* ID, char* session_ID, struct sockaddr* cli_addr, struct cl
 }
 
 //insert link at the first location of conf session list
-struct session_node* insert_sess(char* ID, struct session_node** head_sess) {
+struct session_node* insert_sess(char* ID, char* admin, struct session_node** head_sess) {
    //create a link
    struct session_node *link = (struct session_node*) malloc(sizeof(struct session_node));
 	link->ID = (char *) malloc(100);
+   link->admin = (char *) malloc(100);
    strcpy(link->ID ,ID);
+   strcpy(link->admin ,admin);
    link->head_c = NULL;
 	
    //point it to old first node
