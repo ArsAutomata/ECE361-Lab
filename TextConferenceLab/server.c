@@ -210,7 +210,7 @@ int get_listener_sock(){
 // Creates and binds a socket, then waits for the first packet to open a file and start writing data to it.
 // On last packet, write the data and close the file descriptor
 int main(int argc, char *argv[])
-{\
+{
        
 
     char buffer[MAXLINE];
@@ -223,7 +223,7 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
-// Get a port
+    // Get a port
     FILE *fp;
     char path[1000];
     int port;
@@ -381,9 +381,10 @@ int main(int argc, char *argv[])
                     m_msg.type = msg.type;
                     m_msg.size = msg.size;
                     // Turn the char arrays into char pointers to easily compare to NULL and such
-                    m_msg.client_data = (char *)malloc(strlen(msg.data) + 1);
-                    m_msg.client_id = (char *)malloc(strlen(msg.data) + 1);
-                    strcpy(m_msg.client_data, msg.data);
+                    m_msg.client_data = (char *)malloc(strlen(msg.data));
+                    m_msg.client_id = (char *)malloc(21);
+                    strncpy(m_msg.client_data, msg.data,msg.size);
+                    fprintf(stderr, "pw: %s %d \n", m_msg.client_data, msg.size);
                     strcpy(m_msg.client_id, msg.source);
 
                     on_login(m_msg,new_fd, (struct sockaddr *)&cliaddr);
@@ -412,8 +413,8 @@ int main(int argc, char *argv[])
                         m_msg.size = msg.size;
                         // Turn the char arrays into char pointers to easily compare to NULL and such
                         m_msg.client_data = (char *)malloc(strlen(msg.data) + 1);
-                        m_msg.client_id = (char *)malloc(strlen(msg.data) + 1);
-                        strcpy(m_msg.client_data, msg.data);
+                        m_msg.client_id = (char *)malloc(21);
+                        strncpy(m_msg.client_data, msg.data,msg.size);
                         strcpy(m_msg.client_id, msg.source);
 
                         switch (msg.type){
@@ -470,6 +471,7 @@ void on_login(struct m_data msg, int fd, struct sockaddr *cli_addr)
 
     // Check if ID exists
     int ID_exist = 0;
+    
     for (int i = 0; i < NUMTOTALCLIENTS; i++)
     {
         if (strcmp(ID_arr[i], msg.client_id) == 0)
@@ -479,9 +481,11 @@ void on_login(struct m_data msg, int fd, struct sockaddr *cli_addr)
             break;
         }
     }
+    
+
     if (ID_exist == 0)
     {
-
+        
         // Send NACK
         char pre_pkt_string[200];
         sprintf(pre_pkt_string, "%d:%d:%s:%s",
@@ -498,6 +502,7 @@ void on_login(struct m_data msg, int fd, struct sockaddr *cli_addr)
     // Check if matches pw
     if (strcmp(pw_arr[ID_exist - 1], msg.client_data) != 0)
     {
+        fprintf(stderr, "fcukin here/.??? %s %s\n", pw_arr[ID_exist - 1], msg.client_data);
         // Send NACK
         char pre_pkt_string[200];
         sprintf(pre_pkt_string, "%d:%d:%s:%s",
@@ -579,7 +584,7 @@ void on_join(struct m_data msg, int fd)
     }
 
     // Add client to conference session
-    insert_cli(msg.client_id, client_session->ID, NULL, &(client_session->head_c), fd);
+    insert_cli(msg.client_id, client_session->ID, client->cli_addr, &(client_session->head_c), fd);
 
     // Send JN_ACK
     char pre_pkt_string[200];
@@ -631,10 +636,25 @@ void on_new_sess(struct m_data msg, int fd)
 
     // Create new session
     struct session_node *current = insert_sess(msg.client_data, &head_sess);
-    
-    fprintf(stderr, "inserting in create");
+
+    if(head_sess){
+        fprintf(stderr, "creating session worked, name is %s\n", head_sess->ID);
+    }else{
+        fprintf(stderr, "Session head is null :l \n");
+    }
+    fprintf(stderr, "inserting in create\n");
     // Join the session
-    insert_cli(msg.client_id, msg.client_data, NULL, &(current->head_c), fd);
+    insert_cli(msg.client_id, msg.client_data, client->cli_addr, &(current->head_c), fd);
+
+    if(current->head_c){
+        fprintf(stderr, "Inserting client worked, name is %s\n", current->head_c->ID);
+    }else{
+        fprintf(stderr, "Session client head is null :l \n");
+    }
+
+
+
+
     // Send NS_ACK
     char pre_pkt_string[200];
     sprintf(pre_pkt_string, "%d:%d:%s:%s",
