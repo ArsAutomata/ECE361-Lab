@@ -16,6 +16,7 @@ struct client_node {
 // Nodes for conference session list
 struct session_node {
     char* ID;
+    char* admin; 
     struct client_node *head_c;
     struct session_node *next;
 };
