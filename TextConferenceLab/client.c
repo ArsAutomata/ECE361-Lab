@@ -357,7 +357,7 @@ void send_text(char *text)
 
 	strcpy(buffer, text_string);
 
-	send_buffer();
+	if(!send_buffer()) printf("Send msg failed");
 	return;
 }
 
@@ -473,16 +473,11 @@ int main()
 
 		if (sockfd > 0)
 		{
-
-			FD_SET(fileno(stdin), &socketset);
-			select(fileno(stdin) + 1, &socketset, NULL, NULL, NULL);
-			// TODO: it keeps looping here if i dont comment the below out
-			// FD_SET(sockfd, &socketset);
-			// select(sockfd + 1, &socketset, NULL, NULL, NULL);
+			FD_SET(sockfd, &socketset);
+			select(sockfd + 1, &socketset, NULL, NULL, NULL);
 		}
 		else
 		{
-
 			select(fileno(stdin) + 1, &socketset, NULL, NULL, NULL);
 		}
 
@@ -495,7 +490,7 @@ int main()
 			clear_buffer();
 			if (response->type == MESSAGE)
 			{
-				printf("%s", response->data);
+				printf("%s: %s", response->source, response->data);
 			}
 		}
 		else if (FD_ISSET(fileno(stdin), &socketset))
@@ -622,7 +617,6 @@ int main()
 						strcpy(totaltext, cmd);
 						int cmdlen = strlen(cmd);
 						fgets(totaltext + cmdlen, MAX_DATA - cmdlen, stdin);
-						printf("sending message: %s", totaltext);
 						send_text(totaltext);
 					}
 					else

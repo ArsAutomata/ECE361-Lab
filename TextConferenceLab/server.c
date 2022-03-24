@@ -632,22 +632,12 @@ void on_message(Message msg, int fd)
     // Get the client's session id
     struct client_node *client = find_cli(msg.source, &head_cli);
     struct session_node *client_session = find_sess(client->session_ID, &head_sess);
-
+    fprintf(stderr, "User %s sent: %s",client->ID, msg.data);
     client = client_session->head_c;
-
     // For each client in the session
     while (client)
     {
-
-        // Creating socket file descriptor
-        int temp_fd;
-        if ((temp_fd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
-        {
-            perror("socket creation failed");
-            exit(EXIT_FAILURE);
-        }
-        // Connect the socket
-        connect(temp_fd, client->cli_addr, sizeof(client->cli_addr));
+        if(strcmp(client->ID, msg.source) == 0) {client = client->next;continue;}
 
         // Send the message packet
         char pre_pkt_string[200];
@@ -656,11 +646,8 @@ void on_message(Message msg, int fd)
                 sizeof(msg.data),
                 msg.source,
                 msg.data);
-        send(temp_fd, pre_pkt_string, sizeof(pre_pkt_string), 0);
-
-        // Close the temporary file descriptor
-        close(temp_fd);
-
+        send(client->fd, pre_pkt_string, sizeof(pre_pkt_string), 0);
+        fprintf(stderr, "User %s received: %s",client->ID, msg.data);
         // Next client
         client = client->next;
     }
