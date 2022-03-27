@@ -14,21 +14,6 @@
 #define MAX_NAME 100
 #define MAX_DATA 1000
 
-char ID_arr[6][MAX_NAME] = {
-	"pete",
-	"julia",
-	"luigi",
-	"mr.cow",
-	"piss",
-	"123"};
-char pw_arr[6][20] = {
-	"1234ttyu",
-	"3456gv",
-	"password3",
-	"mr.password",
-	"peeword",
-	"123"};
-
 enum TYPES
 {
 	LOGIN,
@@ -49,7 +34,10 @@ enum TYPES
 	ADM_TRAN,
 	ADM_ACK,
 	ADM_NAK,
-	SERVER_CLOSED
+	SERVER_CLOSED,
+	REGISTER,
+	RE_ACK,
+	RE_NAK
 };
 
 typedef struct message
@@ -76,15 +64,14 @@ Message *deserialize(char *string)
 	source = strtok(NULL, ":");
 	data = strtok(NULL, ":");
 	// exception handle
-	if (typevar == NULL) {fprintf(stderr, "\nException! type\n");
+	if (typevar == NULL) {
 		return NULL;}
-	else if(size == NULL) {fprintf(stderr, "\nException! size\n");
+	else if(size == NULL) {
 		return NULL;}
-	else if(source == NULL){fprintf(stderr, "\nException! source\n");
+	else if(source == NULL){
 		return NULL;}
 	else if(data == NULL)
 	{
-		fprintf(stderr, "\nException! data\n");
 		return NULL;
 	}
 

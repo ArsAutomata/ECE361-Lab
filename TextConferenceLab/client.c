@@ -36,6 +36,7 @@ char buffer[BUFFER_SIZE];
 char client_id[COMMAND_LEN];
 
 void login(char *client_id, char *password, char *server_ip, char *server_port);
+void sign_up(char *client_id, char *password, char *server_ip, char *server_port);
 void createsession(char *session_id);
 void joinsession(char *session_id);
 void leavesession();
@@ -93,6 +94,7 @@ int main()
 			recv(sockfd, buffer, BUFFER_SIZE - 1, 0);
 			Message *response = deserialize(buffer);
 			clear_buffer();
+			if(response == NULL) continue;
 			if (response->type == MESSAGE)
 			{
 				printf("%s: %s", response->source, response->data);
@@ -102,6 +104,7 @@ int main()
 			recv(sockfd, buffer, BUFFER_SIZE - 1, 0);
 			Message *response = deserialize(buffer);
 			clear_buffer();
+			if(response == NULL) continue;
 			if (response->type == SERVER_CLOSED)
 			{
 				printf("The server has closed and you have been logged out\n");
@@ -131,8 +134,22 @@ int main()
 					scanf("%s", server_port);
 					login(client_id, password, server_ip, server_port);
 				}
-			}
-			else if (strcmp(cmd, "/logout") == 0)
+			}else if (strcmp(cmd, "/register") == 0){
+				if (logged_in) {
+					char *garb;
+					scanf("%s", garb);
+					scanf("%s", garb);
+					scanf("%s", garb);
+					scanf("%s", garb);
+					printf("You are already logged in");}
+				else {
+					scanf("%s", client_id);
+					scanf("%s", password);
+					scanf("%s", server_ip);
+					scanf("%s", server_port);
+					sign_up(client_id, password, server_ip, server_port);
+				}
+			}else if (strcmp(cmd, "/logout") == 0)
 			{
 				if (logged_in) logout();
 				else printf("currently not logged in\n");
@@ -255,6 +272,78 @@ void login(char *client_id, char *password, char *server_ip, char *server_port)
 		return;
 	}else if (response->type == LO_NAK){
 		fprintf(stderr, "Login failed: %s\n", response->data);
+		close(sockfd);
+		return;
+	}else{
+		fprintf(stderr, "very big wrong ahhh!");
+	}
+}
+
+void sign_up(char *client_id, char *password, char *server_ip, char *server_port){
+	// check for possible errors
+	if (client_id == NULL || password == NULL || server_ip == NULL || server_port == NULL)
+	{
+		printf("Incorrect usage of register: /register <client_id> <password> <server ip> <port>\n");
+		return;
+	}
+
+	struct addrinfo hints;
+	struct addrinfo *server_info, *server_pointer;
+	int return_value;
+	memset(&hints, 0, sizeof(hints));
+	hints.ai_family = AF_UNSPEC;
+	hints.ai_socktype = SOCK_STREAM;
+
+	if (return_value = getaddrinfo(server_ip, server_port, &hints, &server_info) != 0)
+	{
+		fprintf(stderr, "getaddrinfo error: %d\n", return_value);
+	}
+
+	for (server_pointer = server_info; server_pointer != NULL; server_pointer->ai_next)
+	{
+		if ((sockfd = socket(server_pointer->ai_family, server_pointer->ai_socktype, server_pointer->ai_protocol)) == -1)
+		{
+			printf("socket connected");
+			continue;
+		}
+		if (connect(sockfd, server_pointer->ai_addr, server_pointer->ai_addrlen) == -1)
+		{
+			close(sockfd);
+			printf("client not connected");
+			continue;
+		}
+		else
+		{
+			break;
+		}
+	}
+
+	Message login_mes;
+	login_mes.type = REGISTER;
+	strcpy(login_mes.source, client_id);
+	strcpy(login_mes.data, password);
+	login_mes.size = strlen(password);
+
+	// Send login info
+	strcpy(buffer, serialize(login_mes));
+	if (!send_buffer()) return;
+	
+	int num_bytes = recv(sockfd, buffer, BUFFER_SIZE - 1, 0);
+	if (num_bytes == -1){
+		fprintf(stderr, "Failed to receive");
+		close(sockfd);
+		return;
+	}
+    
+	Message *response = deserialize(buffer);
+	clear_buffer();
+
+	if (response->type == RE_ACK){
+		fprintf(stderr, "Registered successfully! You are now logged in\n");
+		logged_in = true;
+		return;
+	}else if (response->type == RE_NAK){
+		fprintf(stderr, "Registration failed: %s\n", response->data);
 		close(sockfd);
 		return;
 	}else{

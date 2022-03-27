@@ -16,7 +16,7 @@
 #include <signal.h>
 
 #define MAXLINE 1250
-#define NUMTOTALCLIENTS 6
+
 
 #include "link_list_impl.h"
 #include "message.h"
@@ -24,18 +24,20 @@
 struct client_node *head_cli = NULL;
 struct session_node *head_sess = NULL;
 
-
-struct client_node conn_clients_list[6];
-
+int num_total_clients = 0;
+char **ID_arr;
+char **pw_arr;
 
 void on_join(Message msg, int fd);
 void on_new_sess(Message msg, int fd);
 void on_login(Message msg, int fd, struct sockaddr *cli_addr);
+void on_signup(Message msg, int fd, struct sockaddr *cli_addr);
 void on_message(Message msg, int fd);
 void on_query(char *ID, int fd);
 void on_leave_sess(char *ID);
 void on_logout(char *ID);
 void sigint_handler(int sig_num);
+void parse_csv();
 
 
 // parse the packet string
@@ -313,13 +315,23 @@ int main(int argc, char *argv[])
     // Constantly listen on this socket
     listen(sockfd, 100);
     
+    // Get total number of clients currently registered
+    FILE *client_db = NULL;
+    client_db = fopen("client_db.txt","r");
+    char db_line[80];
+    while (fgets(db_line, 80, client_db)) {
+        num_total_clients++;
+    }
+
     int new_fd;
-    struct pollfd pfds[NUMTOTALCLIENTS+1];
+    struct pollfd pfds[num_total_clients+1];
+    // Get an updated list of registered client info
+    parse_csv();
 
     while (1)
     {   
         memset(pfds, 0, sizeof(pfds));
-        for (int i = 0; i < NUMTOTALCLIENTS+1; i++) {
+        for (int i = 0; i < num_total_clients+1; i++) {
             pfds[i].fd = 0;
             pfds[i].events = POLLIN;
             pfds[i].revents = 0;
@@ -328,7 +340,8 @@ int main(int argc, char *argv[])
         pfds[0].events = POLLIN;
 
         struct client_node* head = head_cli;
-        int active[NUMTOTALCLIENTS] = {0};
+        int active[num_total_clients];
+        memset(active, 0, sizeof(active));
         int itr = 0;
         while(head){
 
@@ -369,13 +382,11 @@ int main(int argc, char *argv[])
 
                     int recv_size = recv(new_fd, (char *)buffer, MAXLINE, 0);
 
-
-
                     // Process the packet
                     msg = parsemsg(buffer);
-                    on_login(msg,new_fd, (struct sockaddr *)&cliaddr);
+                    if (msg.type == REGISTER) on_signup(msg,new_fd, (struct sockaddr *)&cliaddr);
+                    else on_login(msg,new_fd, (struct sockaddr *)&cliaddr);
                 }else{
-
 
                      // regular client
                     int sender_fd = pfds[i].fd;
@@ -395,11 +406,14 @@ int main(int argc, char *argv[])
                     }else{
                         // Process the packet
                         msg = parsemsg(buffer);
-
                         switch (msg.type){
 
                             case LOGIN:
                                 on_login(msg,sender_fd, (struct sockaddr *)&cliaddr);
+                                break;
+                            
+                            case REGISTER:
+                                on_signup(msg,sender_fd, (struct sockaddr *)&cliaddr);
                                 break;
 
                             case JOIN:
@@ -469,20 +483,21 @@ void sigint_handler(int sig_num)
 
 void on_login(Message msg, int fd, struct sockaddr *cli_addr)
 {
+    parse_csv();
 
     // Check if ID exists
     int ID_exist = 0;
     
-    for (int i = 0; i < NUMTOTALCLIENTS; i++)
+    for (int i = 0; i < num_total_clients; i++)
     {
+        
         if (strcmp(ID_arr[i], msg.source) == 0)
-        {
+        {   
             ID_exist = i + 1;
             break;
         }
     }
     
-
     if (ID_exist == 0)
     {
         // Send NACK
@@ -501,6 +516,7 @@ void on_login(Message msg, int fd, struct sockaddr *cli_addr)
     // Check if matches pw
     if (strcmp(pw_arr[ID_exist - 1], msg.data) != 0)
     {
+        fprintf(stderr, "pw %s %s\n",pw_arr[ID_exist - 1], msg.data);
         // Send NACK
         char pre_pkt_string[200];
         sprintf(pre_pkt_string, "%d:%d:%s:%s",
@@ -540,6 +556,72 @@ void on_login(Message msg, int fd, struct sockaddr *cli_addr)
             "data");
     send(fd, pre_pkt_string, sizeof(pre_pkt_string), 0);
     fprintf(stderr, "Logged in %s\n", msg.source);
+}
+
+void on_signup(Message msg, int fd, struct sockaddr *cli_addr)
+{
+    // Get an updated list of registered client info
+    parse_csv();
+
+    // Check if ID exists
+    int ID_exist = 0;
+    for (int i = 0; i < num_total_clients; i++)
+    {
+        if (strcmp(ID_arr[i], msg.source) == 0)
+        {
+            ID_exist = i + 1;
+            break;
+        }
+    }
+    if (ID_exist != 0)
+    {
+        // Send NACK
+        char pre_pkt_string[200];
+        sprintf(pre_pkt_string, "%d:%d:%s:%s",
+                RE_NAK,
+                29,
+                msg.source,
+                "Client is already registered");
+                
+        send(fd, pre_pkt_string, sizeof(pre_pkt_string), 0);
+        close(fd);
+        return;
+    }
+
+    // Check if already logged in
+    struct client_node *client = find_cli(msg.source, &head_cli);
+    if (client != NULL)
+    {
+        // Send NACK
+        char pre_pkt_string[200];
+        sprintf(pre_pkt_string, "%d:%d:%s:%s",
+                RE_NAK,
+                28,
+                msg.source,
+                "Client is already logged in");
+        send(fd, pre_pkt_string, sizeof(pre_pkt_string), 0);
+        close(fd);
+        return;
+    }
+
+    // Add to CSV file
+    FILE *client_db = NULL;
+    client_db = fopen("client_db.txt","a");
+    fprintf(client_db, "%s,%s\n", msg.source, msg.data);
+    fclose(client_db);
+    num_total_clients++;
+
+    // Add to connected clients
+    insert_cli(msg.source, NULL, cli_addr, &head_cli, fd);
+    // Send back RE_ACK
+    char pre_pkt_string[200];
+    sprintf(pre_pkt_string, "%d:%d:%s:%s",
+            RE_ACK,
+            0,
+            msg.source,
+            "data");
+    send(fd, pre_pkt_string, sizeof(pre_pkt_string), 0);
+    fprintf(stderr, "Registered and logged in %s\n", msg.source);
 }
 
 void on_join(Message msg, int fd)
@@ -780,3 +862,38 @@ void on_logout(char *ID)
     
 }
 
+void parse_csv(){
+    int i =0;
+
+    if(ID_arr != NULL){ 
+        for (i =0; i < num_total_clients; i++){
+            free(ID_arr[i]);
+            free(pw_arr[i]);
+        }
+        free(ID_arr);
+        free(pw_arr);
+    }
+        
+    // Maximum length of 20 chars for ID and pw
+    ID_arr = (char **)malloc(num_total_clients *sizeof(char *));
+    pw_arr = (char **)malloc(num_total_clients *sizeof(char *));
+    for (i =0; i < num_total_clients; i++){
+            ID_arr[i] = (char *)malloc(20);
+            pw_arr[i] = (char *)malloc(20);
+    }
+    FILE *client_db = NULL;
+    client_db = fopen("client_db.txt","r");
+    char buffer[80];
+    i = 0;
+    while (fgets(buffer, 80, client_db)) {
+        // Get the ID and store
+        char *token = strtok(buffer, ",");
+        strcpy(ID_arr[i],token);
+
+        // Get the pw and store
+        token = strtok(NULL, ",");
+        strncpy(pw_arr[i],token, strlen(token)-1);
+        i++;
+    }
+    fclose(client_db);
+}
