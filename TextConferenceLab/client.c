@@ -162,13 +162,19 @@ int main()
 				else printf("please log in first\n");
 			
 			}else if (strcmp(cmd, "/transfer") == 0){
-
-				scanf("%s", client_id);
-				if (logged_in && in_session) transferuser(client_id);
+                char tran_id[100];
+				scanf("%s", tran_id);
+				if (logged_in && in_session) transferuser(tran_id);
 				else printf( !logged_in ? "please log in first\n" : "please create a session first\n");
 			
 			}else if (strcmp(cmd, "/showadmin") == 0){
 				if (logged_in && in_session) showadmin(client_id);
+				else printf( !logged_in ? "please log in first\n" : "please create a session first\n");
+
+            }else if (strcmp(cmd, "/kick") == 0){
+                char kick_id[100]; 
+                scanf("%s", kick_id);
+				if (logged_in && in_session) kickuser(kick_id);
 				else printf( !logged_in ? "please log in first\n" : "please create a session first\n");
 
 			}else if (strcmp(cmd, "/quit") == 0){
@@ -299,6 +305,7 @@ void createsession(char *session_id)
 
 	if (response->type == NS_ACK) {
 		fprintf(stderr, "Session %s created\n", session_id);
+        in_session = true;
 		strcpy(current_session, session_id);
 	}
 	else if (response->type == NS_NAK) fprintf(stderr,"%s\n", response->data);
@@ -422,7 +429,7 @@ void list()
 	return;
 }
 
-void transferuser(char *kick_id)
+void kickuser(char *kick_id)
 {
 	// check for possible errors
 	Message kick_mes;
@@ -432,7 +439,6 @@ void transferuser(char *kick_id)
 	kick_mes.size = strlen(kick_id);
 	strcpy(buffer, serialize(kick_mes));
 
-	printf("%s\n", buffer);
 	if (!send_buffer())
 	{
 		fprintf(stderr, "Couldn't send kick info\n");
@@ -464,11 +470,11 @@ void transferuser(char *kick_id)
 	}
 }
 
-void kickuser(char *tran_id)
+void transferuser(char *tran_id)
 {
 	// check for possible errors
 	Message tran_mes;
-	tran_mes.type = ADM_KICK;
+	tran_mes.type = ADM_TRAN;
 	strcpy(tran_mes.source, client_id);
 	strcpy(tran_mes.data, tran_id);
 	tran_mes.size = strlen(tran_id);
@@ -516,7 +522,6 @@ void showadmin(){
 	tran_mes.size = strlen(current_session);
 	strcpy(buffer, serialize(tran_mes));
 
-	printf("%s\n", buffer);
 	if (!send_buffer())
 	{
 		fprintf(stderr, "Couldn't send transfer info\n");
