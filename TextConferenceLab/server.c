@@ -36,7 +36,7 @@ void on_query(char *ID, int fd);
 void on_leave_sess(char *ID);
 void on_logout(char *ID);
 void sigint_handler(int sig_num);
-
+void on_show_admin(Message msg, int fd);
 
 // parse the packet string
 Message parsemsg(char *msg)
@@ -780,3 +780,34 @@ void on_logout(char *ID)
     
 }
 
+void on_show_admin(Message msg, int fd)
+{
+
+    // Check if session exists
+    struct session_node *client_session = find_sess(msg.data, &head_sess);
+    if (client_session == NULL)
+    {
+        // Session does not exist
+        // Send ADM_NACK
+        char pre_pkt_string[200];
+        char *data = "Session does not exist";
+        sprintf(pre_pkt_string, "%d:%d:%s:%s",
+                ADM_NAK,
+                strlen(data),
+                msg.source,
+                data);
+        send(fd, pre_pkt_string, sizeof(pre_pkt_string), 0);
+        return;
+    }
+
+    // Send ADM_ACK
+    char pre_pkt_string[200];
+    char *data = client_session->admin;
+    sprintf(pre_pkt_string, "%d:%d:%s:%s",
+            ADM_NAK,
+            strlen(data),
+            msg.source,
+            data);
+    send(fd, pre_pkt_string, sizeof(pre_pkt_string), 0);
+    return;
+}
