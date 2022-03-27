@@ -37,8 +37,11 @@ void on_query(char *ID, int fd);
 void on_leave_sess(char *ID);
 void on_logout(char *ID);
 void sigint_handler(int sig_num);
-void parse_csv();
 
+void parse_csv();
+void on_show_admin(char *ID, int fd);
+void on_kick(Message msg, int fd);
+void on_transfer(Message msg, int fd);
 
 // parse the packet string
 Message parsemsg(char *msg)
@@ -440,6 +443,18 @@ int main(int argc, char *argv[])
                             case QUERY:
                                 on_query(msg.source, sender_fd);
                                 break;
+                            
+                            case ADM_SHOW:
+                                on_show_admin(msg.source, sender_fd);
+                                break;
+                            
+                            case ADM_KICK: 
+                                on_kick(msg, sender_fd); 
+                                break; 
+                            
+                            case ADM_TRAN: 
+                                on_transfer(msg, sender_fd); 
+                                break; 
 
                             default:
                                 printf("Shouldnt be here");
@@ -862,6 +877,7 @@ void on_logout(char *ID)
     
 }
 
+
 void parse_csv(){
     int i =0;
 
@@ -896,4 +912,168 @@ void parse_csv(){
         i++;
     }
     fclose(client_db);
+}
+
+void on_show_admin(char *ID, int fd)
+{
+    // If the client is in a session
+    struct client_node *conn_client = find_cli(ID, &head_cli);
+    struct session_node *client_session = find_sess(conn_client->session_ID, &head_sess);
+    if (client_session == NULL)
+    {
+        // Send ADM_NCK
+        char pre_pkt_string[200];
+        char *data = "not in a session right now";
+        sprintf(pre_pkt_string, "%d:%d:%s:%s",
+                ADM_NAK,
+                strlen(data),
+                "server",
+                data);
+        send(fd, pre_pkt_string, sizeof(pre_pkt_string), 0);
+        return;
+    } else {
+        // Send ADM_ACK
+        char pre_pkt_string[200];
+        char *data = client_session->admin;
+        sprintf(pre_pkt_string, "%d:%d:%s:%s",
+                ADM_ACK,
+                strlen(data),
+                "server",
+                data);
+        send(fd, pre_pkt_string, sizeof(pre_pkt_string), 0);
+        return;   
+    }
+
+}
+
+void on_kick(Message msg, int fd)
+{
+    // If the client is in a session 
+    struct client_node *conn_client = find_cli(msg.source, &head_cli);
+    struct session_node *client_session = find_sess(conn_client->session_ID, &head_sess);
+    if (client_session == NULL)
+    {
+        // Send ADM_NCK
+        char pre_pkt_string[200];
+        char *data = "not in a session right now";
+        sprintf(pre_pkt_string, "%d:%d:%s:%s",
+                ADM_NAK,
+                strlen(data),
+                "server",
+                data);
+        send(fd, pre_pkt_string, sizeof(pre_pkt_string), 0);
+        return;
+    } else {
+        //check if the client is the admin
+        if (strcmp(msg.source, client_session->admin) == 0){
+            
+            //remove the client
+            on_leave_sess(msg.data);
+            
+            // Send ADM_ACK
+            char pre_pkt_string[200];
+            char *data = client_session->admin;
+            sprintf(pre_pkt_string, "%d:%d:%s:%s",
+                ADM_ACK,
+                strlen(data),
+                "server",
+                data);
+            send(fd, pre_pkt_string, sizeof(pre_pkt_string), 0);
+            return;   
+        } else {
+        //not the admin 
+            // Send ADM_NCK
+            char pre_pkt_string[200];
+            char *data = "not the session leader cannot kick";
+            sprintf(pre_pkt_string, "%d:%d:%s:%s",
+                ADM_NAK,
+                strlen(data),
+                "server",
+                data);
+            send(fd, pre_pkt_string, sizeof(pre_pkt_string), 0);
+            return;
+        }
+    }
+}
+
+void on_transfer(Message msg, int fd)
+{
+    // If the client is in a session 
+    struct client_node *conn_client = find_cli(msg.source, &head_cli);
+    struct session_node *client_session = find_sess(conn_client->session_ID, &head_sess);
+    if (client_session == NULL)
+    { 
+        // Send ADM_NCK
+        char pre_pkt_string[200];
+        char *data = "not in a session right now";
+        sprintf(pre_pkt_string, "%d:%d:%s:%s",
+                ADM_NAK,
+                strlen(data),
+                "server",
+                data);
+        send(fd, pre_pkt_string, sizeof(pre_pkt_string), 0);
+        return;
+    } else {
+        //check if the client is the admin
+        if (strcmp(msg.source, client_session->admin) == 0){
+            
+            //check if the other client is logged in 
+            struct client_node *tran_client = find_cli(msg.data, &head_cli);
+            if (tran_client == NULL){
+                // Send ADM_NCK
+                char pre_pkt_string[200];
+                char *data = "transfer client not logged in";
+                sprintf(pre_pkt_string, "%d:%d:%s:%s",
+                    ADM_NAK,
+                    strlen(data),
+                    "server",
+                    data);
+                send(fd, pre_pkt_string, sizeof(pre_pkt_string), 0);
+                return;
+            }
+            
+            //check if the other client is in the same session 
+            struct session_node *tran_session = find_sess(tran_client->session_ID, &head_sess);
+            if (tran_session != client_session){
+                // Send ADM_NCK
+                char pre_pkt_string[200];
+                char *data = "transfer client is not in the same session ";
+                sprintf(pre_pkt_string, "%d:%d:%s:%s",
+                    ADM_NAK,
+                    strlen(data),
+                    "server",
+                    data);
+                send(fd, pre_pkt_string, sizeof(pre_pkt_string), 0);
+                return;
+            }else{
+                
+                client_session->admin = msg.data; 
+                // Send ADM_ACK
+                char pre_pkt_string[200];
+                char *data = client_session->admin;
+                sprintf(pre_pkt_string, "%d:%d:%s:%s",
+                    ADM_ACK,
+                    strlen(data),
+                    "server",
+                    data);
+                send(fd, pre_pkt_string, sizeof(pre_pkt_string), 0);
+                return; 
+          
+
+            }
+        } else {
+            //not the admin 
+            // Send ADM_NCK
+            char pre_pkt_string[200];
+            char *data = "not the session leader cannot transfer";
+            sprintf(pre_pkt_string, "%d:%d:%s:%s",
+                ADM_NAK,
+                strlen(data),
+                "server",
+                data);
+            send(fd, pre_pkt_string, sizeof(pre_pkt_string), 0);
+            return;
+        }
+    }
+
 }

@@ -34,6 +34,7 @@ char buffer[BUFFER_SIZE];
 
 // client source
 char client_id[COMMAND_LEN];
+char current_session[COMMAND_LEN];
 
 void login(char *client_id, char *password, char *server_ip, char *server_port);
 void sign_up(char *client_id, char *password, char *server_ip, char *server_port);
@@ -44,6 +45,7 @@ void logout();
 void list();
 void transferuser(char *kick_id);
 void kickuser(char *tran_id);
+void showadmin(); 
 
 bool send_buffer();
 void send_text(char *text);
@@ -177,9 +179,19 @@ int main()
 				else printf("please log in first\n");
 			
 			}else if (strcmp(cmd, "/transfer") == 0){
+                char tran_id[100];
+				scanf("%s", tran_id);
+				if (logged_in && in_session) transferuser(tran_id);
+				else printf( !logged_in ? "please log in first\n" : "please create a session first\n");
+			
+			}else if (strcmp(cmd, "/showadmin") == 0){
+				if (logged_in && in_session) showadmin(client_id);
+				else printf( !logged_in ? "please log in first\n" : "please create a session first\n");
 
-				scanf("%s", client_id);
-				if (logged_in && in_session) transferuser(client_id);
+            }else if (strcmp(cmd, "/kick") == 0){
+                char kick_id[100]; 
+                scanf("%s", kick_id);
+				if (logged_in && in_session) kickuser(kick_id);
 				else printf( !logged_in ? "please log in first\n" : "please create a session first\n");
 
 			}else if (strcmp(cmd, "/quit") == 0){
@@ -380,8 +392,11 @@ void createsession(char *session_id)
 
 	in_session = (response->type == NS_ACK);
 
-	if (response->type == NS_ACK) fprintf(stderr, "Session %s created\n", session_id);
-	
+	if (response->type == NS_ACK) {
+		fprintf(stderr, "Session %s created\n", session_id);
+        in_session = true;
+		strcpy(current_session, session_id);
+	}
 	else if (response->type == NS_NAK) fprintf(stderr,"%s\n", response->data);
 		
 	else fprintf(stderr,"very big wrong ahhh!");
@@ -414,6 +429,7 @@ void joinsession(char *session_id)
 	{
 		fprintf(stderr, "Joined session %s successfully\n", session_id);
 		in_session = true;
+		strcpy(current_session, session_id);
 		return;
 	}
 	else if (response->type == JN_NAK)
@@ -502,7 +518,7 @@ void list()
 	return;
 }
 
-void transferuser(char *kick_id)
+void kickuser(char *kick_id)
 {
 	// check for possible errors
 	Message kick_mes;
@@ -512,7 +528,6 @@ void transferuser(char *kick_id)
 	kick_mes.size = strlen(kick_id);
 	strcpy(buffer, serialize(kick_mes));
 
-	printf("%s\n", buffer);
 	if (!send_buffer())
 	{
 		fprintf(stderr, "Couldn't send kick info\n");
@@ -544,11 +559,11 @@ void transferuser(char *kick_id)
 	}
 }
 
-void kickuser(char *tran_id)
+void transferuser(char *tran_id)
 {
 	// check for possible errors
 	Message tran_mes;
-	tran_mes.type = ADM_KICK;
+	tran_mes.type = ADM_TRAN;
 	strcpy(tran_mes.source, client_id);
 	strcpy(tran_mes.data, tran_id);
 	tran_mes.size = strlen(tran_id);
@@ -586,6 +601,47 @@ void kickuser(char *tran_id)
 	}
 }
 
+void showadmin(){
+
+	// check for possible errors
+	Message tran_mes;
+	tran_mes.type = ADM_SHOW;
+	strcpy(tran_mes.source, client_id);
+	strcpy(tran_mes.data, current_session);
+	tran_mes.size = strlen(current_session);
+	strcpy(buffer, serialize(tran_mes));
+
+	if (!send_buffer())
+	{
+		fprintf(stderr, "Couldn't send transfer info\n");
+		return;
+	}
+
+	int num_bytes = recv(sockfd, buffer, BUFFER_SIZE - 1, 0);
+	if (num_bytes == -1)
+	{
+		fprintf(stderr, "Failed to receive");
+		return;
+	}
+
+	Message *response = deserialize(buffer);
+	clear_buffer();
+	if (response->type == ADM_ACK)
+	{
+		fprintf(stderr, "Client %s is the admin!\n", response->data);
+		return;
+	}
+	else if (response->type == ADM_NAK)
+	{
+		fprintf(stderr, "huh? that's a problem", response->data);
+		return;
+	}
+	else
+	{
+		fprintf(stderr, "very big wrong ahhh!");
+	}
+
+}
 
 bool send_buffer()
 {
