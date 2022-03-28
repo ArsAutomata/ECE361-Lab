@@ -1068,7 +1068,7 @@ void on_transfer(Message msg, int fd)
             if (tran_client == NULL){
                 // Send ADM_NCK
                 char pre_pkt_string[200];
-                char *data = "transfer client not logged in";
+                char *data = "That client is not currently logged in";
                 sprintf(pre_pkt_string, "%d:%d:%s:%s",
                     ADM_NAK,
                     strlen(data),
@@ -1092,6 +1092,16 @@ void on_transfer(Message msg, int fd)
                 send(fd, pre_pkt_string, sizeof(pre_pkt_string), 0);
                 return;
             }else{
+                // Send a message to the new admin for the changes in roles
+                char trans_msg[60];
+                sprintf(trans_msg, "You are now the admin of session %s",tran_session->ID);
+                char new_adm_str[200];
+                sprintf(new_adm_str, "%d:%d:%s:%s",
+                        ADM_KICK,
+                        60,
+                        "server",
+                        trans_msg);
+                send(tran_client->fd, new_adm_str, sizeof(new_adm_str), 0);
                 
                 client_session->admin = msg.data; 
                 // Send ADM_ACK
@@ -1103,6 +1113,7 @@ void on_transfer(Message msg, int fd)
                     "server",
                     data);
                 send(fd, pre_pkt_string, sizeof(pre_pkt_string), 0);
+                printf("User %s is now admin of session %s\n",msg.data,client_session->ID  );
                 return; 
           
 

@@ -577,7 +577,6 @@ void transferuser(char *tran_id)
 	tran_mes.size = strlen(tran_id);
 	strcpy(buffer, serialize(tran_mes));
 
-	printf("%s\n", buffer);
 	if (!send_buffer())
 	{
 		fprintf(stderr, "Couldn't send transfer info\n");
