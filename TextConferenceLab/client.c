@@ -100,6 +100,12 @@ int main()
 			if (response->type == MESSAGE)
 			{
 				printf("%s: %s", response->source, response->data);
+			}else if (response->type == SERVER_CLOSED)
+			{
+				fprintf(stderr, "The server has closed and you have been logged out\n");
+				exit(0);
+			}else if(response->type == ADM_KICK){
+				fprintf(stderr, "%s\n", response->data);
 			}
 		}else if(logged_in && FD_ISSET(sockfd, &socketset)){
 			char buf[MAX_DATA];
@@ -109,8 +115,10 @@ int main()
 			if(response == NULL) continue;
 			if (response->type == SERVER_CLOSED)
 			{
-				printf("The server has closed and you have been logged out\n");
+				fprintf(stderr, "The server has closed and you have been logged out\n");
 				exit(0);
+			}else if(response->type == ADM_KICK){
+				fprintf(stderr, "%s\n", response->data);
 			}
 
 		}else if (FD_ISSET(fileno(stdin), &socketset))

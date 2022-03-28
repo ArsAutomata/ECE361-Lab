@@ -972,7 +972,7 @@ void on_kick(Message msg, int fd)
             if (tran_client == NULL){
                 // Send ADM_NCK
                 char pre_pkt_string[200];
-                char *data = "transfer client not logged in";
+                char *data = "Client you want to kick is not logged in";
                 sprintf(pre_pkt_string, "%d:%d:%s:%s",
                     ADM_NAK,
                     strlen(data),
@@ -987,7 +987,7 @@ void on_kick(Message msg, int fd)
             if (tran_session != client_session){
                 // Send ADM_NCK
                 char pre_pkt_string[200];
-                char *data = "transfer client is not in the same session ";
+                char *data = "Client is not in the same session ";
                 sprintf(pre_pkt_string, "%d:%d:%s:%s",
                     ADM_NAK,
                     strlen(data),
@@ -996,6 +996,19 @@ void on_kick(Message msg, int fd)
                 send(fd, pre_pkt_string, sizeof(pre_pkt_string), 0);
                 return;
             }else{
+
+                // Let client know they have been kicked
+                // Send the message packet
+                char kick_msg[50];
+                sprintf(kick_msg, "You have been kicked from session %s",tran_session->ID);
+                char client_str[200];
+                sprintf(client_str, "%d:%d:%s:%s",
+                        ADM_KICK,
+                        50,
+                        "server",
+                        kick_msg);
+                send(tran_client->fd, client_str, sizeof(client_str), 0);
+        
                 
                 //delete client 
                 on_leave_sess(msg.data);
