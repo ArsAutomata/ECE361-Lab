@@ -105,6 +105,8 @@ int main()
 				fprintf(stderr, "The server has closed and you have been logged out\n");
 				exit(0);
 			}else if(response->type == ADM_KICK){
+				in_session = false;
+				strcpy(session_id, NULL);
 				fprintf(stderr, "%s\n", response->data);
 			}
 		}else if(logged_in && FD_ISSET(sockfd, &socketset)){
